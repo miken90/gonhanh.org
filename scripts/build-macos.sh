@@ -30,7 +30,21 @@ if [ "$CLEAN_INSTALL" = true ]; then
     echo "🧹 Cleaning existing installation..."
 
     # Kill running GoNhanh processes
-    pkill -f "GoNhanh" 2>/dev/null || true
+    if pgrep -f "GoNhanh" > /dev/null 2>&1; then
+        echo "Stopping running GoNhanh processes..."
+        pkill -f "GoNhanh" 2>/dev/null || true
+        # Wait for process to terminate
+        sleep 1
+        # Force kill if still running
+        if pgrep -f "GoNhanh" > /dev/null 2>&1; then
+            echo "Force killing GoNhanh..."
+            pkill -9 -f "GoNhanh" 2>/dev/null || true
+            sleep 1
+        fi
+        echo "GoNhanh processes stopped."
+    else
+        echo "No running GoNhanh process found."
+    fi
 
     # Remove from /Applications (requires sudo)
     if [ -d "/Applications/GoNhanh.app" ]; then
