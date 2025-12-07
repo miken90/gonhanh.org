@@ -57,46 +57,79 @@ fn run_vni(cases: &[(&str, &str)]) {
 }
 
 // ============================================================
-// TELEX: MARKS (sắc, huyền, hỏi, ngã, nặng)
+// TELEX: ALL SINGLE VOWELS WITH MARKS
+// Complete matrix: 6 vowels × 5 marks = 30 combinations
 // ============================================================
 
 #[test]
-fn telex_mark_sac() {
+fn telex_a_all_marks() {
     run_telex(&[
-        ("as", "á"), ("es", "é"), ("is", "í"),
-        ("os", "ó"), ("us", "ú"), ("ys", "ý"),
+        ("a", "a"),     // base
+        ("as", "á"),    // sắc
+        ("af", "à"),    // huyền
+        ("ar", "ả"),    // hỏi
+        ("ax", "ã"),    // ngã
+        ("aj", "ạ"),    // nặng
     ]);
 }
 
 #[test]
-fn telex_mark_huyen() {
+fn telex_e_all_marks() {
     run_telex(&[
-        ("af", "à"), ("ef", "è"), ("if", "ì"),
-        ("of", "ò"), ("uf", "ù"), ("yf", "ỳ"),
+        ("e", "e"),     // base
+        ("es", "é"),    // sắc
+        ("ef", "è"),    // huyền
+        ("er", "ẻ"),    // hỏi
+        ("ex", "ẽ"),    // ngã
+        ("ej", "ẹ"),    // nặng
     ]);
 }
 
 #[test]
-fn telex_mark_hoi() {
+fn telex_i_all_marks() {
     run_telex(&[
-        ("ar", "ả"), ("er", "ẻ"), ("ir", "ỉ"),
-        ("or", "ỏ"), ("ur", "ủ"), ("yr", "ỷ"),
+        ("i", "i"),     // base
+        ("is", "í"),    // sắc
+        ("if", "ì"),    // huyền
+        ("ir", "ỉ"),    // hỏi
+        ("ix", "ĩ"),    // ngã
+        ("ij", "ị"),    // nặng
     ]);
 }
 
 #[test]
-fn telex_mark_nga() {
+fn telex_o_all_marks() {
     run_telex(&[
-        ("ax", "ã"), ("ex", "ẽ"), ("ix", "ĩ"),
-        ("ox", "õ"), ("ux", "ũ"), ("yx", "ỹ"),
+        ("o", "o"),     // base
+        ("os", "ó"),    // sắc
+        ("of", "ò"),    // huyền
+        ("or", "ỏ"),    // hỏi
+        ("ox", "õ"),    // ngã
+        ("oj", "ọ"),    // nặng
     ]);
 }
 
 #[test]
-fn telex_mark_nang() {
+fn telex_u_all_marks() {
     run_telex(&[
-        ("aj", "ạ"), ("ej", "ẹ"), ("ij", "ị"),
-        ("oj", "ọ"), ("uj", "ụ"), ("yj", "ỵ"),
+        ("u", "u"),     // base
+        ("us", "ú"),    // sắc
+        ("uf", "ù"),    // huyền
+        ("ur", "ủ"),    // hỏi
+        ("ux", "ũ"),    // ngã
+        ("uj", "ụ"),    // nặng
+    ]);
+}
+
+#[test]
+fn telex_y_all_marks() {
+    run_telex(&[
+        ("y", "y"),     // base
+        ("ys", "ý"),    // sắc
+        ("yf", "ỳ"),    // huyền
+        ("yr", "ỷ"),    // hỏi
+        ("yx", "ỹ"),    // ngã
+        ("yj", "ỵ"),    // nặng
     ]);
 }
 
@@ -178,46 +211,79 @@ fn telex_revert_tone() {
 }
 
 // ============================================================
-// VNI: MARKS (1=sắc, 2=huyền, 3=hỏi, 4=ngã, 5=nặng)
+// VNI: ALL SINGLE VOWELS WITH MARKS
+// Complete matrix: 6 vowels × 5 marks = 30 combinations
 // ============================================================
 
 #[test]
-fn vni_mark_sac() {
+fn vni_a_all_marks() {
     run_vni(&[
-        ("a1", "á"), ("e1", "é"), ("i1", "í"),
-        ("o1", "ó"), ("u1", "ú"), ("y1", "ý"),
+        ("a", "a"),     // base
+        ("a1", "á"),    // sắc
+        ("a2", "à"),    // huyền
+        ("a3", "ả"),    // hỏi
+        ("a4", "ã"),    // ngã
+        ("a5", "ạ"),    // nặng
     ]);
 }
 
 #[test]
-fn vni_mark_huyen() {
+fn vni_e_all_marks() {
     run_vni(&[
-        ("a2", "à"), ("e2", "è"), ("i2", "ì"),
-        ("o2", "ò"), ("u2", "ù"), ("y2", "ỳ"),
+        ("e", "e"),     // base
+        ("e1", "é"),    // sắc
+        ("e2", "è"),    // huyền
+        ("e3", "ẻ"),    // hỏi
+        ("e4", "ẽ"),    // ngã
+        ("e5", "ẹ"),    // nặng
     ]);
 }
 
 #[test]
-fn vni_mark_hoi() {
+fn vni_i_all_marks() {
     run_vni(&[
-        ("a3", "ả"), ("e3", "ẻ"), ("i3", "ỉ"),
-        ("o3", "ỏ"), ("u3", "ủ"), ("y3", "ỷ"),
+        ("i", "i"),     // base
+        ("i1", "í"),    // sắc
+        ("i2", "ì"),    // huyền
+        ("i3", "ỉ"),    // hỏi
+        ("i4", "ĩ"),    // ngã
+        ("i5", "ị"),    // nặng
     ]);
 }
 
 #[test]
-fn vni_mark_nga() {
+fn vni_o_all_marks() {
     run_vni(&[
-        ("a4", "ã"), ("e4", "ẽ"), ("i4", "ĩ"),
-        ("o4", "õ"), ("u4", "ũ"), ("y4", "ỹ"),
+        ("o", "o"),     // base
+        ("o1", "ó"),    // sắc
+        ("o2", "ò"),    // huyền
+        ("o3", "ỏ"),    // hỏi
+        ("o4", "õ"),    // ngã
+        ("o5", "ọ"),    // nặng
     ]);
 }
 
 #[test]
-fn vni_mark_nang() {
+fn vni_u_all_marks() {
     run_vni(&[
-        ("a5", "ạ"), ("e5", "ẹ"), ("i5", "ị"),
-        ("o5", "ọ"), ("u5", "ụ"), ("y5", "ỵ"),
+        ("u", "u"),     // base
+        ("u1", "ú"),    // sắc
+        ("u2", "ù"),    // huyền
+        ("u3", "ủ"),    // hỏi
+        ("u4", "ũ"),    // ngã
+        ("u5", "ụ"),    // nặng
+    ]);
+}
+
+#[test]
+fn vni_y_all_marks() {
+    run_vni(&[
+        ("y", "y"),     // base
+        ("y1", "ý"),    // sắc
+        ("y2", "ỳ"),    // huyền
+        ("y3", "ỷ"),    // hỏi
+        ("y4", "ỹ"),    // ngã
+        ("y5", "ỵ"),    // nặng
     ]);
 }
 
