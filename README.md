@@ -47,8 +47,6 @@ GoNhanh được xây dựng với mục tiêu trở thành bộ gõ tiếng Vi�
 
 Tiếp nối di sản của **VietKey**, **UniKey**, **OpenKey** và **EVKey**, tôi (**Kha Phan**) phát triển GoNhanh để giải quyết nhu cầu về sự ổn định tuyệt đối trên các công cụ lập trình hiện đại.
 
-Dự án **phi lợi nhuận** với cam kết: **Mã nguồn mở - Miễn phí - Của cộng đồng**.
-
 ## So sánh
 
 |                |      GoNhanh       |        EVKey        |    OpenKey     |    GoTiengViet    |     UniKey     |
