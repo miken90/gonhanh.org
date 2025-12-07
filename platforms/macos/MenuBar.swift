@@ -188,11 +188,16 @@ class MenuBarController {
             window.setContentSize(controller.view.fittingSize)
             window.center()
             window.isReleasedWhenClosed = false
-            window.level = .floating  // Hiện trên các window khác
             onboardingWindow = window
         }
+        // Tạm chuyển sang regular để hiển thị window cho accessory app
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         onboardingWindow?.makeKeyAndOrderFront(nil)
+        // Ẩn dock icon sau khi window đã hiện
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NSApp.setActivationPolicy(.accessory)
+        }
     }
 
     @objc private func showAbout() {
@@ -206,8 +211,12 @@ class MenuBarController {
             window.isReleasedWhenClosed = false
             aboutWindow = window
         }
-        aboutWindow?.makeKeyAndOrderFront(nil)
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        aboutWindow?.makeKeyAndOrderFront(nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NSApp.setActivationPolicy(.accessory)
+        }
     }
 
     @objc private func openHelp() {
