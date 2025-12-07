@@ -3,381 +3,226 @@ import SwiftUI
 // MARK: - Onboarding View
 
 struct OnboardingView: View {
-    @State private var currentPage = 0
+    @State private var currentStep = 0
     @State private var hasPermission = false
-    @State private var didOpenSettings = false
     @State private var selectedMode: InputMode = .telex
-    @State private var permissionTimer: Timer?
 
-    // Đã restart sau khi cấp quyền chưa?
-    private var didRestartAfterPermission: Bool {
-        UserDefaults.standard.bool(forKey: SettingsKey.permissionGranted)
-    }
-
-    // Nếu đã restart và có quyền -> bắt đầu từ Setup page
-    private var initialPage: Int {
-        (didRestartAfterPermission && hasPermission) ? 2 : 0
-    }
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(spacing: 0) {
-            // Content area
-            Group {
-                switch currentPage {
-                case 0:
-                    WelcomePage()
-                case 1:
-                    PermissionPage(
-                        hasPermission: hasPermission,
-                        didOpenSettings: didOpenSettings
-                    )
-                case 2:
-                    if didRestartAfterPermission {
-                        // Sau khi restart: hiện success rồi setup
-                        PermissionSuccessPage()
-                    } else {
-                        // Flow bình thường (không nên đến đây)
-                        SetupPage(selectedMode: $selectedMode)
-                    }
-                case 3:
-                    SetupPage(selectedMode: $selectedMode)
-                default:
-                    EmptyView()
-                }
-            }
-            .frame(height: 340)
+            // Content
+            contentView
+                .frame(height: 340)
 
             Divider()
 
-            // Bottom bar
+            // Footer
             HStack {
-                // Page indicators
-                pageIndicators
-
+                StepIndicator(current: currentStep, total: totalSteps)
                 Spacer()
-
-                // Buttons
-                HStack(spacing: 12) {
-                    if currentPage > 0 && currentPage < 2 {
-                        Button("Quay lại") {
-                            currentPage -= 1
-                        }
-                    }
-                    primaryButton
-                }
+                actionButton
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
         }
         .frame(width: 480)
-        .onAppear {
-            startPermissionCheck()
-            // Nếu đã restart sau khi cấp quyền -> nhảy đến page 2
-            if didRestartAfterPermission && AXIsProcessTrusted() {
-                currentPage = 2
+        .onAppear { hasPermission = AXIsProcessTrusted() }
+        .onReceive(timer) { _ in hasPermission = AXIsProcessTrusted() }
+    }
+
+    // MARK: - Content
+
+    private var totalSteps: Int { hasPermission ? 2 : 3 }
+
+    @ViewBuilder
+    private var contentView: some View {
+        if hasPermission {
+            // Đã có quyền: Success → Setup
+            if currentStep == 0 {
+                SuccessView()
+            } else {
+                SetupView(selectedMode: $selectedMode)
+            }
+        } else {
+            // Chưa có quyền: Welcome → Permission → Setup
+            switch currentStep {
+            case 0: WelcomeView()
+            case 1: PermissionView()
+            default: SetupView(selectedMode: $selectedMode)
             }
         }
-        .onDisappear { stopPermissionCheck() }
     }
 
     @ViewBuilder
-    private var pageIndicators: some View {
-        let totalPages = didRestartAfterPermission ? 2 : 3
-        let displayPage = didRestartAfterPermission ? (currentPage - 2) : currentPage
-
-        HStack(spacing: 8) {
-            ForEach(0..<totalPages, id: \.self) { index in
-                Circle()
-                    .fill(index == displayPage ? Color.accentColor : Color.secondary.opacity(0.3))
-                    .frame(width: 6, height: 6)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var primaryButton: some View {
-        switch currentPage {
-        case 0:
-            Button("Tiếp tục") {
-                currentPage = 1
-            }
-            .keyboardShortcut(.defaultAction)
-            .buttonStyle(.borderedProminent)
-
-        case 1:
-            if hasPermission {
-                Button("Khởi động lại") {
-                    restartApp()
-                }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
+    private var actionButton: some View {
+        if hasPermission {
+            // Flow có quyền
+            if currentStep == 0 {
+                Button("Tiếp tục") { currentStep = 1 }
+                    .buttonStyle(.borderedProminent)
             } else {
-                Button("Mở System Settings") {
-                    openAccessibilitySettings()
-                }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
+                Button("Hoàn tất") { finish() }
+                    .buttonStyle(.borderedProminent)
             }
-
-        case 2:
-            if didRestartAfterPermission {
-                Button("Tiếp tục") {
-                    currentPage = 3
-                }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
-            } else {
-                Button("Hoàn tất") {
-                    finishOnboarding()
-                }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
+        } else {
+            // Flow chưa có quyền
+            switch currentStep {
+            case 0:
+                Button("Tiếp tục") { currentStep = 1 }
+                    .buttonStyle(.borderedProminent)
+            case 1:
+                Button("Mở Cài đặt") { openSettings() }
+                    .buttonStyle(.borderedProminent)
+            default:
+                Button("Hoàn tất") { finish() }
+                    .buttonStyle(.borderedProminent)
             }
-
-        case 3:
-            Button("Hoàn tất") {
-                finishOnboarding()
-            }
-            .keyboardShortcut(.defaultAction)
-            .buttonStyle(.borderedProminent)
-
-        default:
-            EmptyView()
         }
     }
 
     // MARK: - Actions
 
-    private func openAccessibilitySettings() {
-        didOpenSettings = true
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
-        }
+    private func openSettings() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
     }
 
-    private func restartApp() {
-        UserDefaults.standard.set(selectedMode.rawValue, forKey: SettingsKey.method)
-        UserDefaults.standard.set(true, forKey: SettingsKey.permissionGranted)
-        let path = Bundle.main.bundlePath
-        let task = Process()
-        task.launchPath = "/bin/sh"
-        task.arguments = ["-c", "sleep 0.5 && open \"\(path)\""]
-        try? task.run()
-        NSApp.terminate(nil)
-    }
-
-    private func finishOnboarding() {
+    private func finish() {
         UserDefaults.standard.set(selectedMode.rawValue, forKey: SettingsKey.method)
         UserDefaults.standard.set(true, forKey: SettingsKey.hasCompletedOnboarding)
-        // Clear permission flag
-        UserDefaults.standard.removeObject(forKey: SettingsKey.permissionGranted)
         NotificationCenter.default.post(name: .onboardingCompleted, object: nil)
         NSApp.keyWindow?.close()
     }
+}
 
-    // MARK: - Permission Timer
+// MARK: - Step Indicator
 
-    private func startPermissionCheck() {
-        checkPermission()
-        permissionTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            checkPermission()
+private struct StepIndicator: View {
+    let current: Int
+    let total: Int
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<total, id: \.self) { i in
+                Circle()
+                    .fill(i == current ? Color.accentColor : Color.secondary.opacity(0.3))
+                    .frame(width: 6, height: 6)
+            }
         }
-    }
-
-    private func stopPermissionCheck() {
-        permissionTimer?.invalidate()
-        permissionTimer = nil
-    }
-
-    private func checkPermission() {
-        hasPermission = AXIsProcessTrusted()
     }
 }
 
-// MARK: - Welcome Page
+// MARK: - Pages
 
-private struct WelcomePage: View {
+private struct WelcomeView: View {
     var body: some View {
         VStack(spacing: 16) {
             Spacer()
-
             Image(nsImage: AppMetadata.logo)
                 .resizable()
                 .frame(width: 80, height: 80)
-
             Text("Chào mừng đến với \(AppMetadata.name)")
                 .font(.system(size: 22, weight: .bold))
-
             Text(AppMetadata.tagline)
-                .font(.body)
                 .foregroundStyle(.secondary)
-
             Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 40)
     }
 }
 
-// MARK: - Permission Success Page
-
-private struct PermissionSuccessPage: View {
+private struct SuccessView: View {
     var body: some View {
         VStack(spacing: 16) {
             Spacer()
-
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 48))
                 .foregroundStyle(.green)
-
             Text("Đã cấp quyền thành công")
                 .font(.system(size: 22, weight: .bold))
-
             Text("\(AppMetadata.name) đã sẵn sàng hoạt động.")
-                .font(.body)
                 .foregroundStyle(.secondary)
-
             Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 40)
     }
 }
 
-// MARK: - Permission Page
-
-private struct PermissionPage: View {
-    let hasPermission: Bool
-    let didOpenSettings: Bool
-
+private struct PermissionView: View {
     var body: some View {
         VStack(spacing: 16) {
             Spacer()
-
             Image(systemName: "hand.raised.fill")
                 .font(.system(size: 40))
-                .foregroundStyle(.blue)
-
-            Text("Cần quyền Accessibility")
+                .foregroundStyle(.orange)
+            Text("Cấp quyền Accessibility")
                 .font(.system(size: 22, weight: .bold))
-
-            Text("\(AppMetadata.name) cần quyền Accessibility để gõ tiếng Việt.")
-                .font(.body)
+            Text("Bật \(AppMetadata.name) trong System Settings để gõ tiếng Việt.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            VStack(alignment: .leading, spacing: 10) {
-                PermissionStep(number: 1, text: "Mở System Settings → Privacy & Security → Accessibility", isComplete: didOpenSettings)
-                PermissionStep(number: 2, text: "Bật \(AppMetadata.name) trong danh sách", isComplete: hasPermission)
-                PermissionStep(number: 3, text: "Nhấn \"Khởi động lại\" để áp dụng", isComplete: false)
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Mở Privacy & Security → Accessibility", systemImage: "1.circle.fill")
+                Label("Bật công tắc bên cạnh \(AppMetadata.name)", systemImage: "2.circle.fill")
             }
-            .padding(.top, 4)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .padding(.top, 8)
 
             Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 40)
     }
 }
 
-private struct PermissionStep: View {
-    let number: Int
-    let text: String
-    let isComplete: Bool
-
-    var body: some View {
-        HStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(isComplete ? Color.green : Color.secondary.opacity(0.2))
-                    .frame(width: 22, height: 22)
-
-                if isComplete {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white)
-                } else {
-                    Text("\(number)")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Text(text)
-                .font(.callout)
-                .foregroundStyle(isComplete ? .secondary : .primary)
-        }
-    }
-}
-
-// MARK: - Setup Page
-
-private struct SetupPage: View {
+private struct SetupView: View {
     @Binding var selectedMode: InputMode
 
     var body: some View {
         VStack(spacing: 16) {
             Spacer()
-
             Image(systemName: "keyboard")
                 .font(.system(size: 40))
                 .foregroundStyle(.blue)
-
             Text("Chọn kiểu gõ")
                 .font(.system(size: 22, weight: .bold))
-
-            Text("Bạn có thể thay đổi trong menu bất cứ lúc nào.")
-                .font(.body)
+            Text("Có thể thay đổi sau trong menu.")
                 .foregroundStyle(.secondary)
 
             VStack(spacing: 8) {
                 ForEach(InputMode.allCases, id: \.rawValue) { mode in
-                    ModeOption(
-                        mode: mode,
-                        isSelected: selectedMode == mode,
-                        onSelect: { selectedMode = mode }
-                    )
+                    ModeButton(mode: mode, isSelected: selectedMode == mode) {
+                        selectedMode = mode
+                    }
                 }
             }
             .frame(maxWidth: 260)
-            .padding(.top, 4)
-
+            .padding(.top, 8)
             Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 40)
     }
 }
 
-private struct ModeOption: View {
+private struct ModeButton: View {
     let mode: InputMode
     let isSelected: Bool
-    let onSelect: () -> Void
+    let action: () -> Void
 
     var body: some View {
-        Button(action: onSelect) {
+        Button(action: action) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(mode.name)
-                        .font(.headline)
-                    Text(mode.description)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text(mode.name).font(.headline)
+                    Text(mode.description).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
                     .foregroundStyle(isSelected ? .blue : .secondary.opacity(0.4))
             }
             .padding(10)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.blue.opacity(0.1) : Color.secondary.opacity(0.05))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.blue.opacity(0.5) : Color.clear, lineWidth: 1)
-            )
+            .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? Color.blue.opacity(0.1) : Color.secondary.opacity(0.05)))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(isSelected ? Color.blue.opacity(0.5) : .clear))
         }
         .buttonStyle(.plain)
     }
