@@ -205,10 +205,23 @@ impl Engine {
         }
 
         // Handle tone modifiers (aa, aw, a6, a7, etc.)
-        // First check for double-key revert (before filtering by tone status)
+        // Only include vowels that don't have a tone yet (for new tone application)
+        let vowel_keys: Vec<u16> = self
+            .buf
+            .iter()
+            .filter(|c| keys::is_vowel(c.key) && c.tone == 0)
+            .map(|c| c.key)
+            .collect();
+
+        // First try to apply tone to a new vowel
+        if let Some((tone, target_key)) = m.is_tone_for(key, &vowel_keys) {
+            return self.handle_tone(key, tone, target_key);
+        }
+
+        // No new vowel to apply → check for revert (double-key press on same target)
         if let Some(Transform::Tone(last_key, _, last_target)) = self.last_transform {
             if last_key == key {
-                // Check if this key could apply to the same vowel (revert case)
+                // Check if this key would have targeted the same vowel
                 let all_vowel_keys: Vec<u16> = self
                     .buf
                     .iter()
@@ -221,18 +234,6 @@ impl Engine {
                     }
                 }
             }
-        }
-
-        // Only include vowels that don't have a tone yet (for new tone application)
-        let vowel_keys: Vec<u16> = self
-            .buf
-            .iter()
-            .filter(|c| keys::is_vowel(c.key) && c.tone == 0)
-            .map(|c| c.key)
-            .collect();
-
-        if let Some((tone, target_key)) = m.is_tone_for(key, &vowel_keys) {
-            return self.handle_tone(key, tone, target_key);
         }
 
         // Handle marks (s/f/r/x/j or 1-5)
