@@ -10,32 +10,44 @@ struct OnboardingView: View {
     @State private var selectedMode: InputMode = .telex
     @State private var permissionTimer: Timer?
 
+    // 2 screens if has permission, 3 screens if not
+    private var totalPages: Int { hasPermission && currentPage == 0 ? 2 : 3 }
+
     var body: some View {
         VStack(spacing: 0) {
-            // Content area - fixed height so all pages are consistent
+            // Content area
             Group {
-                switch currentPage {
-                case 0:
-                    WelcomePage()
-                case 1:
-                    PermissionPage(
-                        hasPermission: hasPermission,
-                        didOpenSettings: didOpenSettings
-                    )
-                case 2:
+                if hasPermission && currentPage == 0 {
+                    // Already has permission - show success
+                    PermissionSuccessPage()
+                } else if hasPermission && currentPage == 1 {
+                    // Setup page
                     SetupPage(selectedMode: $selectedMode)
-                default:
-                    EmptyView()
+                } else {
+                    // Normal flow without permission
+                    switch currentPage {
+                    case 0:
+                        WelcomePage()
+                    case 1:
+                        PermissionPage(
+                            hasPermission: hasPermission,
+                            didOpenSettings: didOpenSettings
+                        )
+                    case 2:
+                        SetupPage(selectedMode: $selectedMode)
+                    default:
+                        EmptyView()
+                    }
                 }
             }
             .frame(height: 340)
 
             Divider()
 
-            // Bottom bar - always visible
+            // Bottom bar
             HStack {
                 HStack(spacing: 8) {
-                    ForEach(0..<3, id: \.self) { index in
+                    ForEach(0..<totalPages, id: \.self) { index in
                         Circle()
                             .fill(index == currentPage ? Color.accentColor : Color.secondary.opacity(0.3))
                             .frame(width: 6, height: 6)
@@ -63,38 +75,47 @@ struct OnboardingView: View {
 
     @ViewBuilder
     private var primaryButton: some View {
-        switch currentPage {
-        case 0:
+        if hasPermission && currentPage == 0 {
+            // Success page -> go to setup
             Button("Tiếp tục") {
-                currentPage = hasPermission ? 2 : 1
+                currentPage = 1
             }
             .keyboardShortcut(.defaultAction)
             .buttonStyle(.borderedProminent)
-
-        case 1:
-            if hasPermission {
-                Button("Khởi động lại") {
-                    restartApp()
-                }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
-            } else {
-                Button("Mở System Settings") {
-                    openAccessibilitySettings()
-                }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
-            }
-
-        case 2:
+        } else if hasPermission && currentPage == 1 {
+            // Setup page -> finish
             Button("Hoàn tất") {
                 finishOnboarding()
             }
             .keyboardShortcut(.defaultAction)
             .buttonStyle(.borderedProminent)
+        } else {
+            // Normal flow without permission
+            switch currentPage {
+            case 0:
+                Button("Tiếp tục") {
+                    currentPage = 1
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
 
-        default:
-            EmptyView()
+            case 1:
+                Button("Mở System Settings") {
+                    openAccessibilitySettings()
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+
+            case 2:
+                Button("Hoàn tất") {
+                    finishOnboarding()
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+
+            default:
+                EmptyView()
+            }
         }
     }
 
