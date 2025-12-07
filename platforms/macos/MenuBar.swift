@@ -82,6 +82,9 @@ class MenuBarController {
     }
 
     private func startKeyboardHook() {
+        // Initialize Rust engine first
+        RustBridge.initialize()
+
         // Apply settings to Rust engine
         RustBridge.setEnabled(isEnabled)
         RustBridge.setMethod(currentMethod.rawValue)
