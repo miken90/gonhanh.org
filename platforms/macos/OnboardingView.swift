@@ -120,14 +120,16 @@ struct OnboardingView: View {
     private func restartApp() {
         UserDefaults.standard.set(true, forKey: "gonhanh.didRestart")
         UserDefaults.standard.set(selectedMode.rawValue, forKey: SettingsKey.method)
-        CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
 
         let path = Bundle.main.bundlePath
-        let task = Process()
-        task.launchPath = "/bin/sh"
-        task.arguments = ["-c", "sleep 0.5 && open \"\(path)\""]
-        try? task.run()
-        NSApp.terminate(nil)
+        // Đợi UserDefaults sync xong trước khi terminate
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            let task = Process()
+            task.launchPath = "/bin/sh"
+            task.arguments = ["-c", "sleep 0.3 && open \"\(path)\""]
+            try? task.run()
+            NSApp.terminate(nil)
+        }
     }
 
     private func finish() {
