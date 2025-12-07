@@ -71,13 +71,11 @@ struct OnboardingView: View {
 
     private var footerView: some View {
         HStack {
-            // Step indicator
+            // Step indicator dots
             HStack(spacing: 6) {
-                let steps = isPostRestart ? 2 : 2
-                let current = isPostRestart ? (currentStep - 10) : currentStep
-                ForEach(0..<steps, id: \.self) { i in
+                ForEach(0..<totalSteps, id: \.self) { i in
                     Circle()
-                        .fill(i == current ? Color.accentColor : Color.secondary.opacity(0.3))
+                        .fill(i == currentStepIndex ? Color.accentColor : Color.secondary.opacity(0.3))
                         .frame(width: 6, height: 6)
                 }
             }
