@@ -6,6 +6,58 @@ if [ -f "$HOME/.cargo/env" ]; then
     source "$HOME/.cargo/env"
 fi
 
+# Parse arguments
+CLEAN_INSTALL=false
+for arg in "$@"; do
+    case $arg in
+        --clean)
+            CLEAN_INSTALL=true
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: build-macos.sh [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --clean    Remove existing GoNhanh app and clear permissions before building"
+            echo "  --help     Show this help message"
+            exit 0
+            ;;
+    esac
+done
+
+# Clean install: remove existing app and reset permissions
+if [ "$CLEAN_INSTALL" = true ]; then
+    echo "🧹 Cleaning existing installation..."
+
+    # Kill running GoNhanh processes
+    pkill -f "GoNhanh" 2>/dev/null || true
+
+    # Remove from /Applications (requires sudo)
+    if [ -d "/Applications/GoNhanh.app" ]; then
+        echo "Removing /Applications/GoNhanh.app (requires sudo)..."
+        sudo rm -rf "/Applications/GoNhanh.app"
+    fi
+
+    # Remove from Input Methods
+    if [ -d "$HOME/Library/Input Methods/GoNhanh.app" ]; then
+        echo "Removing ~/Library/Input Methods/GoNhanh.app..."
+        rm -rf "$HOME/Library/Input Methods/GoNhanh.app"
+    fi
+
+    # Clear TCC database (Accessibility permissions) - requires Full Disk Access or SIP disabled
+    echo "Note: To fully reset Accessibility permissions, go to:"
+    echo "  System Settings > Privacy & Security > Accessibility"
+    echo "  Remove GoNhanh from the list manually"
+    echo ""
+
+    # Clear input source registration
+    echo "Clearing input source cache..."
+    defaults delete com.apple.HIToolbox AppleEnabledInputSources 2>/dev/null || true
+
+    echo "✅ Clean complete!"
+    echo ""
+fi
+
 echo "🍎 Building macOS app..."
 
 # Build macOS app with xcodebuild
