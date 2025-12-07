@@ -255,7 +255,7 @@ struct StepRowView: View {
 
 struct SetupStepView: View {
     @Binding var selectedMode: InputMode
-    let onNext: () -> Void
+    let onFinish: () -> Void
 
     var body: some View {
         VStack(spacing: 20) {
@@ -284,8 +284,8 @@ struct SetupStepView: View {
 
             Spacer()
 
-            Button(action: onNext) {
-                Label("Tiếp tục", systemImage: "arrow.right")
+            Button(action: onFinish) {
+                Text("Hoàn tất")
                     .frame(width: 140)
             }
             .buttonStyle(.borderedProminent)
@@ -329,64 +329,6 @@ struct ModeCard: View {
             )
         }
         .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Done Step
-
-struct DoneStepView: View {
-    let onFinish: () -> Void
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 60))
-                .foregroundColor(.green)
-
-            Text("Sẵn sàng!")
-                .font(.system(size: 26, weight: .bold))
-
-            Text("Bạn có thể bắt đầu gõ tiếng Việt ngay")
-                .font(.body)
-                .foregroundColor(.secondary)
-
-            VStack(alignment: .leading, spacing: 10) {
-                TipRowView(icon: "menubar.rectangle", text: "Click icon menu bar để bật/tắt")
-                TipRowView(icon: "keyboard", text: "Gõ bình thường, dấu tự động được thêm")
-            }
-            .padding(20)
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(12)
-
-            Spacer()
-
-            Button(action: onFinish) {
-                Text("Hoàn tất")
-                    .frame(width: 140)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-
-            Spacer().frame(height: 30)
-        }
-        .padding(30)
-    }
-}
-
-struct TipRowView: View {
-    let icon: String
-    let text: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundColor(.accentColor)
-                .frame(width: 20)
-            Text(text)
-                .font(.body)
-        }
     }
 }
 
