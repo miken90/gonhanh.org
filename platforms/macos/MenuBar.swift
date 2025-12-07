@@ -82,15 +82,16 @@ class MenuBarController {
     }
 
     private func startKeyboardHook() {
-        // Initialize Rust engine first
+        // Initialize Rust engine first (before setting any config)
         RustBridge.initialize()
 
-        // Apply settings to Rust engine
+        // Start keyboard hook (will skip init since already done)
+        KeyboardHookManager.shared.start()
+
+        // Apply settings AFTER engine is initialized
         RustBridge.setEnabled(isEnabled)
         RustBridge.setMethod(currentMethod.rawValue)
 
-        // Start keyboard hook
-        KeyboardHookManager.shared.start()
         permissionGranted = true
         updateMenu()
     }
