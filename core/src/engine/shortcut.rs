@@ -1,8 +1,21 @@
 //! Shortcut Table - Abbreviation expansion
 //!
 //! Allows users to define shortcuts like "vn" → "Việt Nam"
+//! Shortcuts can be specific to input methods (Telex/VNI) or apply to all.
 
 use std::collections::HashMap;
+
+/// Input method that shortcut applies to
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum InputMethod {
+    /// Apply to all input methods
+    #[default]
+    All,
+    /// Apply only to Telex
+    Telex,
+    /// Apply only to VNI
+    Vni,
+}
 
 /// Trigger condition for shortcut
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -35,9 +48,12 @@ pub struct Shortcut {
     pub case_mode: CaseMode,
     /// Whether this shortcut is enabled
     pub enabled: bool,
+    /// Which input method this shortcut applies to
+    pub input_method: InputMethod,
 }
 
 impl Shortcut {
+    /// Create a new shortcut with word boundary trigger (applies to all input methods)
     pub fn new(trigger: &str, replacement: &str) -> Self {
         Self {
             trigger: trigger.to_lowercase(),
@@ -45,9 +61,11 @@ impl Shortcut {
             condition: TriggerCondition::OnWordBoundary,
             case_mode: CaseMode::MatchCase,
             enabled: true,
+            input_method: InputMethod::All,
         }
     }
 
+    /// Create an immediate trigger shortcut (applies to all input methods)
     pub fn immediate(trigger: &str, replacement: &str) -> Self {
         Self {
             trigger: trigger.to_lowercase(),
@@ -55,6 +73,52 @@ impl Shortcut {
             condition: TriggerCondition::Immediate,
             case_mode: CaseMode::Exact,
             enabled: true,
+            input_method: InputMethod::All,
+        }
+    }
+
+    /// Create a Telex-specific shortcut with immediate trigger
+    pub fn telex(trigger: &str, replacement: &str) -> Self {
+        Self {
+            trigger: trigger.to_lowercase(),
+            replacement: replacement.to_string(),
+            condition: TriggerCondition::Immediate,
+            case_mode: CaseMode::Exact,
+            enabled: true,
+            input_method: InputMethod::Telex,
+        }
+    }
+
+    /// Create a VNI-specific shortcut with immediate trigger
+    pub fn vni(trigger: &str, replacement: &str) -> Self {
+        Self {
+            trigger: trigger.to_lowercase(),
+            replacement: replacement.to_string(),
+            condition: TriggerCondition::Immediate,
+            case_mode: CaseMode::Exact,
+            enabled: true,
+            input_method: InputMethod::Vni,
+        }
+    }
+
+    /// Set the input method for this shortcut
+    pub fn for_method(mut self, method: InputMethod) -> Self {
+        self.input_method = method;
+        self
+    }
+
+    /// Check if shortcut applies to given input method
+    ///
+    /// - If shortcut is for `All`: matches any method
+    /// - If shortcut is for `Telex`: matches `Telex` or `All` query
+    /// - If shortcut is for `Vni`: matches `Vni` or `All` query
+    pub fn applies_to(&self, query_method: InputMethod) -> bool {
+        match self.input_method {
+            // Shortcut for All → matches any query
+            InputMethod::All => true,
+            // Shortcut for specific method → matches if query is same method OR query is All
+            InputMethod::Telex => query_method == InputMethod::Telex || query_method == InputMethod::All,
+            InputMethod::Vni => query_method == InputMethod::Vni || query_method == InputMethod::All,
         }
     }
 }
@@ -87,16 +151,53 @@ impl ShortcutTable {
         }
     }
 
-    /// Create with default Vietnamese shortcuts
+    /// Create with default Vietnamese shortcuts (common abbreviations for all methods)
     pub fn with_defaults() -> Self {
         let mut table = Self::new();
 
-        // Common abbreviations
+        // Common abbreviations (apply to all input methods)
         table.add(Shortcut::new("vn", "Việt Nam"));
         table.add(Shortcut::new("hcm", "Hồ Chí Minh"));
         table.add(Shortcut::new("hn", "Hà Nội"));
         table.add(Shortcut::new("dc", "được"));
         table.add(Shortcut::new("ko", "không"));
+
+        // Telex-specific shortcuts
+        // "w" → "ư" when not used as tone modifier (standalone w)
+        table.add(Shortcut::telex("w", "ư"));
+
+        table
+    }
+
+    /// Create with Telex defaults only
+    pub fn with_telex_defaults() -> Self {
+        let mut table = Self::new();
+
+        // Telex-specific: "w" → "ư" (when standalone, not as modifier)
+        table.add(Shortcut::telex("w", "ư"));
+
+        table
+    }
+
+    /// Create with VNI defaults only
+    pub fn with_vni_defaults() -> Self {
+        // Currently no VNI-specific shortcuts
+        Self::new()
+    }
+
+    /// Create with all defaults (common + method-specific)
+    pub fn with_all_defaults() -> Self {
+        let mut table = Self::new();
+
+        // Common abbreviations (apply to all input methods)
+        table.add(Shortcut::new("vn", "Việt Nam"));
+        table.add(Shortcut::new("hcm", "Hồ Chí Minh"));
+        table.add(Shortcut::new("hn", "Hà Nội"));
+        table.add(Shortcut::new("dc", "được"));
+        table.add(Shortcut::new("ko", "không"));
+
+        // Telex-specific shortcuts
+        table.add(Shortcut::telex("w", "ư"));
 
         table
     }
@@ -117,17 +218,28 @@ impl ShortcutTable {
         result
     }
 
-    /// Check if buffer matches any shortcut
+    /// Check if buffer matches any shortcut (for any input method)
     ///
     /// Returns (trigger, shortcut) if match found
     pub fn lookup(&self, buffer: &str) -> Option<(&str, &Shortcut)> {
+        self.lookup_for_method(buffer, InputMethod::All)
+    }
+
+    /// Check if buffer matches any shortcut for specific input method
+    ///
+    /// Returns (trigger, shortcut) if match found
+    pub fn lookup_for_method(
+        &self,
+        buffer: &str,
+        method: InputMethod,
+    ) -> Option<(&str, &Shortcut)> {
         let buffer_lower = buffer.to_lowercase();
 
         // Longest-match-first
         for trigger in &self.sorted_triggers {
             if buffer_lower == *trigger {
                 if let Some(shortcut) = self.shortcuts.get(trigger) {
-                    if shortcut.enabled {
+                    if shortcut.enabled && shortcut.applies_to(method) {
                         return Some((trigger, shortcut));
                     }
                 }
@@ -136,7 +248,7 @@ impl ShortcutTable {
         None
     }
 
-    /// Try to match buffer with trigger key
+    /// Try to match buffer with trigger key (for any input method)
     ///
     /// # Arguments
     /// * `buffer` - Current buffer content (as string)
@@ -151,7 +263,27 @@ impl ShortcutTable {
         key_char: Option<char>,
         is_word_boundary: bool,
     ) -> Option<ShortcutMatch> {
-        let (trigger, shortcut) = self.lookup(buffer)?;
+        self.try_match_for_method(buffer, key_char, is_word_boundary, InputMethod::All)
+    }
+
+    /// Try to match buffer with trigger key for specific input method
+    ///
+    /// # Arguments
+    /// * `buffer` - Current buffer content (as string)
+    /// * `key_char` - The key that was just pressed
+    /// * `is_word_boundary` - Whether key_char is a word boundary
+    /// * `method` - The current input method (Telex/VNI)
+    ///
+    /// # Returns
+    /// ShortcutMatch if a shortcut should be triggered
+    pub fn try_match_for_method(
+        &self,
+        buffer: &str,
+        key_char: Option<char>,
+        is_word_boundary: bool,
+        method: InputMethod,
+    ) -> Option<ShortcutMatch> {
+        let (trigger, shortcut) = self.lookup_for_method(buffer, method)?;
 
         match shortcut.condition {
             TriggerCondition::Immediate => {
@@ -315,5 +447,100 @@ mod tests {
 
         let result = table.lookup("vn");
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_telex_specific_shortcut() {
+        let mut table = ShortcutTable::new();
+        table.add(Shortcut::telex("w", "ư"));
+
+        // Should match for Telex
+        let result = table.try_match_for_method("w", None, false, InputMethod::Telex);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().output, "ư");
+
+        // Should NOT match for VNI
+        let result = table.try_match_for_method("w", None, false, InputMethod::Vni);
+        assert!(result.is_none());
+
+        // Should match for All (fallback)
+        let result = table.try_match_for_method("w", None, false, InputMethod::All);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_vni_specific_shortcut() {
+        let mut table = ShortcutTable::new();
+        table.add(Shortcut::vni("7", "ơ"));
+
+        // Should match for VNI
+        let result = table.try_match_for_method("7", None, false, InputMethod::Vni);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().output, "ơ");
+
+        // Should NOT match for Telex
+        let result = table.try_match_for_method("7", None, false, InputMethod::Telex);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_all_input_method_shortcut() {
+        let mut table = ShortcutTable::new();
+        table.add(Shortcut::new("vn", "Việt Nam"));
+
+        // Should match for Telex
+        let result = table.try_match_for_method("vn", Some(' '), true, InputMethod::Telex);
+        assert!(result.is_some());
+
+        // Should match for VNI
+        let result = table.try_match_for_method("vn", Some(' '), true, InputMethod::Vni);
+        assert!(result.is_some());
+
+        // Should match for All
+        let result = table.try_match_for_method("vn", Some(' '), true, InputMethod::All);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_with_defaults_contains_telex_w() {
+        let table = ShortcutTable::with_defaults();
+
+        // "w" → "ư" should exist for Telex
+        let result = table.lookup_for_method("w", InputMethod::Telex);
+        assert!(result.is_some());
+        let (_, shortcut) = result.unwrap();
+        assert_eq!(shortcut.replacement, "ư");
+        assert_eq!(shortcut.input_method, InputMethod::Telex);
+
+        // "w" should NOT match for VNI
+        let result = table.lookup_for_method("w", InputMethod::Vni);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_shortcut_for_method_builder() {
+        let shortcut = Shortcut::new("test", "Test").for_method(InputMethod::Telex);
+        assert_eq!(shortcut.input_method, InputMethod::Telex);
+
+        let shortcut = Shortcut::immediate("x", "y").for_method(InputMethod::Vni);
+        assert_eq!(shortcut.input_method, InputMethod::Vni);
+    }
+
+    #[test]
+    fn test_applies_to() {
+        let all_shortcut = Shortcut::new("vn", "Việt Nam");
+        assert!(all_shortcut.applies_to(InputMethod::All));
+        assert!(all_shortcut.applies_to(InputMethod::Telex));
+        assert!(all_shortcut.applies_to(InputMethod::Vni));
+
+        let telex_shortcut = Shortcut::telex("w", "ư");
+        assert!(telex_shortcut.applies_to(InputMethod::All));
+        assert!(telex_shortcut.applies_to(InputMethod::Telex));
+        assert!(!telex_shortcut.applies_to(InputMethod::Vni));
+
+        let vni_shortcut = Shortcut::vni("7", "ơ");
+        assert!(vni_shortcut.applies_to(InputMethod::All));
+        assert!(!vni_shortcut.applies_to(InputMethod::Telex));
+        assert!(vni_shortcut.applies_to(InputMethod::Vni));
     }
 }
