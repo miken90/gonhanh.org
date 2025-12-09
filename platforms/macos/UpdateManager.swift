@@ -145,8 +145,13 @@ extension UpdateManager: URLSessionDownloadDelegate {
         let destinationURL = downloadsURL.appendingPathComponent("GoNhanh.dmg")
 
         do {
-            try? FileManager.default.removeItem(at: destinationURL)
-            try FileManager.default.moveItem(at: location, to: destinationURL)
+            // Xóa file cũ nếu tồn tại
+            if FileManager.default.fileExists(atPath: destinationURL.path) {
+                try FileManager.default.removeItem(at: destinationURL)
+            }
+
+            // Copy thay vì move để tránh lỗi cross-volume
+            try FileManager.default.copyItem(at: location, to: destinationURL)
 
             downloadedDMGPath = destinationURL
             state = .readyToInstall(dmgPath: destinationURL)
