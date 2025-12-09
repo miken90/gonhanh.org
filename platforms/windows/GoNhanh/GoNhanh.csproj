@@ -7,6 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>Resources\Icons\app.ico</ApplicationIcon>
 
     <!-- App Info -->
     <AssemblyName>GoNhanh</AssemblyName>
