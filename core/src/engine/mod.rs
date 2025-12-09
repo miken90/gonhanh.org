@@ -78,8 +78,10 @@ enum Transform {
     Mark(u16, u8),
     Tone(u16, u8),
     Stroke(u16),
-    /// W as vowel ư (for revert: ww → ww)
+    /// W as vowel ư (for revert: ww → w)
     WAsVowel,
+    /// W shortcut was explicitly skipped (prevent re-transformation)
+    WShortcutSkipped,
 }
 
 /// Main Vietnamese IME engine
@@ -230,15 +232,27 @@ impl Engine {
     /// - "w" alone → "ư"
     /// - "nhw" → "như" (valid consonant + ư)
     /// - "kw" → "kw" (invalid, k cannot precede ư)
-    /// - "ww" → revert to "ww"
+    /// - "ww" → revert to "w" (shortcut skipped)
+    /// - "www" → "ww" (subsequent w just adds normally)
     fn try_w_as_vowel(&mut self, caps: bool) -> Option<Result> {
-        // Check revert: ww → ww
-        if let Some(Transform::WAsVowel) = self.last_transform {
-            self.last_transform = None;
-            // Revert: backspace "ư", output "ww"
-            let w = if caps { 'W' } else { 'w' };
-            return Some(Result::send(1, &[w, w]));
+        // If shortcut was previously skipped, don't try again
+        if matches!(self.last_transform, Some(Transform::WShortcutSkipped)) {
+            return None;
         }
+
+        // Check revert: ww → w (skip shortcut)
+        if let Some(Transform::WAsVowel) = self.last_transform {
+            self.last_transform = Some(Transform::WShortcutSkipped);
+            // Fix buffer: remove the U(horn) that was added, replace with W
+            self.buf.pop();
+            self.buf.push(Char::new(keys::W, caps));
+            // Revert: backspace "ư", output single "w"
+            let w = if caps { 'W' } else { 'w' };
+            return Some(Result::send(1, &[w]));
+        }
+
+        // Track if buffer was empty (first char of word)
+        let was_empty = self.buf.is_empty();
 
         // Try adding U (ư base) to buffer and validate
         self.buf.push(Char::new(keys::U, caps));
@@ -251,9 +265,15 @@ impl Engine {
         // Validate: is this valid Vietnamese?
         let buffer_keys: Vec<u16> = self.buf.iter().map(|c| c.key).collect();
         if is_valid(&buffer_keys) {
-            // Valid! Output from the position of ư
             let pos = self.buf.len() - 1;
             self.last_transform = Some(Transform::WAsVowel);
+
+            // If buffer was empty, no backspace needed (nothing to replace)
+            if was_empty {
+                let vowel_char = chars::to_char(keys::U, caps, tone::HORN, 0).unwrap();
+                return Some(Result::send(0, &[vowel_char]));
+            }
+
             return Some(self.rebuild_from(pos));
         }
 

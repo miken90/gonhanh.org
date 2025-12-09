@@ -161,7 +161,8 @@ fn telex_w_passthrough_after_invalid_consonant() {
 
 #[test]
 fn telex_ww_reverts() {
-    // "ww" → revert to "ww"
+    // "ww" → revert to "w" (shortcut skipped)
+    // User typing pattern: w→ư, ww→w, www→ww
     let mut e = Engine::new();
 
     // First w → ư
@@ -169,13 +170,16 @@ fn telex_ww_reverts() {
     assert_eq!(result.action, 1);
     assert_eq!(result.chars[0], 'ư' as u32);
 
-    // Second w → revert to "ww"
+    // Second w → revert to "w" (single w, shortcut skipped)
     let result = e.on_key(keys::W, false, false);
     assert_eq!(result.action, 1);
     assert_eq!(result.backspace, 1); // delete "ư"
-    assert_eq!(result.count, 2); // output "ww"
+    assert_eq!(result.count, 1); // output "w"
     assert_eq!(result.chars[0], 'w' as u32);
-    assert_eq!(result.chars[1], 'w' as u32);
+
+    // Third w → just adds w (shortcut was skipped, not retried)
+    let result = e.on_key(keys::W, false, false);
+    assert_eq!(result.action, 0); // Pass through (normal letter)
 }
 
 #[test]
