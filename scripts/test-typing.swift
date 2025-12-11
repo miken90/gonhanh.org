@@ -14,15 +14,17 @@ let keycodes: [Character: UInt16] = [
 
 let configPath = "/tmp/gonhanh_config.txt"
 
+var typeDelay: UInt32 = 30000  // 30ms between keys (adjustable per config)
+
 func typeKey(_ char: Character) {
     guard let keycode = keycodes[char] else { return }
     guard let source = CGEventSource(stateID: .combinedSessionState) else { return }
     if let down = CGEvent(keyboardEventSource: source, virtualKey: keycode, keyDown: true),
        let up = CGEvent(keyboardEventSource: source, virtualKey: keycode, keyDown: false) {
         down.post(tap: .cghidEventTap)
-        usleep(3000)
+        usleep(5000)
         up.post(tap: .cghidEventTap)
-        usleep(15000)
+        usleep(typeDelay)
     }
 }
 
@@ -38,15 +40,16 @@ func setConfig(_ config: String) {
 }
 
 // TELEX: aa=â, ee=ê, oo=ô, aw=ă, ow=ơ, uw=ư, dd=đ | s=sắc, f=huyền, r=hỏi, x=ngã, j=nặng
-let telexInput = "vieejt nam xin chaof camr own nguwowif dduwowcj truwowngf khoong thaatj tooi laf developer code vieejt nam debug laf fix bugs nguwowngj khuyeenr chuyeenj quyeets ddiwnhj thuwowngf xuyeen hoaf biinhf giaos ducj kinh tees xin looix, tooi khoong bieets. function nayf return gias trij variable tuwj ddoongj"
+// người=nguwowif, được=dduwowcj, trường=truwowngf, bình=binhf, định=ddinhj
+let telexInput = "vieejt nam xin chaof camr own nguwowif dduwowcj truwowngf khoong thaatj tooi laf developer code vieejt nam debug laf fix bugs nguwowngj khuyeenr chuyeenj quyeets ddinhj thuwowngf xuyeen hoaf binhf giaos ducj kinh tees xin looix tooi khoong bieets function nayf return gias trij variable tuwj ddoongj"
 
 // VNI: 6=^(â,ê,ô), 7=ơ/ư, 8=ă, 9=đ | 1=sắc, 2=huyền, 3=hỏi, 4=ngã, 5=nặng
 let vniInput = "vie65t nam xin cha2o ca3m o7n ngu7o72i d9u7o75c tru7o72ng kho6ng tha65t to6i la2 developer code vie65t nam debug la2 fix bugs ngu7o75ng khuye63n chuye65n quye61t d9i5nh thu7o72ng xuye6n ho2a bi2nh gia1o du5c kinh te61 xin lo64i, to6i kho6ng bie61t. function na2y return gia1 tri5 variable tu75 d9o65ng"
 
-// Test configs: name, config value
-let testConfigs = [
-    ("medium", "electron,12000,25000,12000"),
-    ("fast", "electron,8000,15000,8000"),
+// Test configs: name, config value, test typing delay (µs)
+let testConfigs: [(String, String, UInt32)] = [
+    ("fast", "electron,8000,15000,8000", 30000),
+    ("slow", "electron,8000,15000,8000", 50000),
 ]
 
 func runTest(mode: String) {
@@ -60,13 +63,14 @@ func runTest(mode: String) {
     print(" 2..."); sleep(1)
     print(" 1..."); sleep(1)
 
-    for (configName, configValue) in testConfigs {
+    for (configName, configValue, delay) in testConfigs {
         setConfig(configValue)
+        typeDelay = delay
 
-        print(" [\(configName.uppercased())] Đang gõ...")
+        print(" [\(configName.uppercased())] Đang gõ (delay: \(delay/1000)ms)...")
 
-        // Type prefix with mode and config: [telex:medium:12000,25000,12000]
-        typeString("[\(mode):\(configName):\(configValue.replacingOccurrences(of: "electron,", with: ""))] ")
+        // Type prefix with mode and config: [telex;fast;8000,15000,8000]
+        typeString("[\(mode);\(configName);\(configValue.replacingOccurrences(of: "electron,", with: ""))] ")
 
         // Type test input
         for char in testInput.lowercased() {
