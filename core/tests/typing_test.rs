@@ -514,7 +514,7 @@ const VNI_DELAYED_TONE: &[(&str, &str)] = &[
     ("tang4", "tãng"),
     ("sang5", "sạng"),
     // Words with circumflex (ô/ê/â) - need mark first (6)
-    ("khong62", "không"),
+    ("khong62", "khồng"),
     ("hong62", "hồng"),
     ("cong61", "công"),
     ("tong61", "tống"),
