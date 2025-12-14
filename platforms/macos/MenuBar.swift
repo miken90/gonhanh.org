@@ -322,8 +322,7 @@ class MenuBarController: NSObject {
     }
 
     private func showMenu() {
-        guard let button = statusItem.button,
-              let buttonWindow = button.window else { return }
+        guard let button = statusItem.button else { return }
 
         // Create panel if needed
         if menuPanel == nil {
@@ -372,9 +371,18 @@ class MenuBarController: NSObject {
         }
 
         // Position below status item
-        let buttonRect = button.convert(button.bounds, to: nil)
-        let screenRect = buttonWindow.convertToScreen(buttonRect)
         let panelSize = menuPanel!.frame.size
+        let screenRect: NSRect
+
+        if let buttonWindow = button.window {
+            // Normal case: button has a window
+            let buttonRect = button.convert(button.bounds, to: nil)
+            screenRect = buttonWindow.convertToScreen(buttonRect)
+        } else {
+            // Fallback: use mouse location (for overflow menu or timing issues)
+            let mouseLocation = NSEvent.mouseLocation
+            screenRect = NSRect(x: mouseLocation.x - 10, y: mouseLocation.y, width: 20, height: 22)
+        }
 
         let x = screenRect.midX - panelSize.width / 2
         let y = screenRect.minY - panelSize.height - 4
