@@ -405,6 +405,22 @@ fn edge_qu_with_mark() {
 }
 
 #[test]
+fn edge_ia_tone_placement() {
+    // ia → tone on i (short vowel), not a
+    // kìa, mía, lìa - descending diphthong where i is main vowel
+    telex(&[
+        ("iaf", "ìa"),
+        ("ias", "ía"),
+        ("iar", "ỉa"),
+        ("iax", "ĩa"),
+        ("iaj", "ịa"),
+        ("kiaf", "kìa"),
+        ("mias", "mía"),
+        ("liaf", "lìa"),
+    ]);
+}
+
+#[test]
 fn edge_mixed_modifiers() {
     // Tone + mark combinations
     telex(&[

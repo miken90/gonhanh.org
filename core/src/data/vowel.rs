@@ -140,6 +140,11 @@ impl Phonology {
                 return v1.pos;
             }
 
+            // ia (kìa, mía): i is main vowel, a is off-glide → mark on i
+            if v1.key == keys::I && v2.key == keys::A {
+                return v1.pos;
+            }
+
             // Main + glide (ai, ao, au, oi, ui): mark on 1st (main vowel)
             if Self::is_main_glide_pair(v1.key, v2.key) {
                 return v1.pos;
@@ -345,6 +350,17 @@ mod tests {
         // ua with q (qua) → mark on a (pos 1)
         let vowels = vec![v(keys::U, Modifier::None, 0), v(keys::A, Modifier::None, 1)];
         assert_eq!(Phonology::find_tone_position(&vowels, false, true, true), 1);
+    }
+
+    #[test]
+    fn test_ia_pattern() {
+        // ia (kìa, mía, lìa) → mark on i (pos 0)
+        // Descending diphthong: i is main vowel, a is off-glide
+        let vowels = vec![v(keys::I, Modifier::None, 0), v(keys::A, Modifier::None, 1)];
+        assert_eq!(
+            Phonology::find_tone_position(&vowels, false, true, false),
+            0
+        );
     }
 
     #[test]
