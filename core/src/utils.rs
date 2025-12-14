@@ -91,6 +91,21 @@ pub fn has_qu_initial(buf: &Buffer) -> bool {
     false
 }
 
+/// Check if 'gi' is initial followed by another vowel
+/// e.g., "gia", "giau" → gi is initial, 'i' is NOT a vowel
+pub fn has_gi_initial(buf: &Buffer) -> bool {
+    if buf.len() < 3 {
+        return false;
+    }
+    // Check for g + i + vowel pattern
+    let first = buf.get(0).map(|c| c.key);
+    let second = buf.get(1).map(|c| c.key);
+    let third = buf.get(2).map(|c| c.key);
+
+    matches!((first, second), (Some(keys::G), Some(keys::I)))
+        && third.map(|k| keys::is_vowel(k)).unwrap_or(false)
+}
+
 mod test_utils {
     //! Shared test utilities for inline tests
     //!

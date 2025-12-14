@@ -210,7 +210,8 @@ pub fn apply_mark(buf: &mut Buffer, mark_value: u8, modern: bool) -> TransformRe
     let last_vowel_pos = vowels.last().map(|v| v.pos).unwrap_or(0);
     let has_final = utils::has_final_consonant(buf, last_vowel_pos);
     let has_qu = utils::has_qu_initial(buf);
-    let pos = Phonology::find_tone_position(&vowels, has_final, modern, has_qu);
+    let has_gi = utils::has_gi_initial(buf);
+    let pos = Phonology::find_tone_position(&vowels, has_final, modern, has_qu, has_gi);
 
     // Clear any existing mark first
     for v in &vowels {
@@ -335,7 +336,8 @@ fn reposition_mark_if_needed(buf: &mut Buffer) {
         let last_vowel_pos = vowels.last().map(|v| v.pos).unwrap_or(0);
         let has_final = utils::has_final_consonant(buf, last_vowel_pos);
         let has_qu = utils::has_qu_initial(buf);
-        let new_pos = Phonology::find_tone_position(&vowels, has_final, true, has_qu);
+        let has_gi = utils::has_gi_initial(buf);
+        let new_pos = Phonology::find_tone_position(&vowels, has_final, true, has_qu, has_gi);
 
         if new_pos != old_pos {
             // Clear old mark

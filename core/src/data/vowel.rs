@@ -87,11 +87,13 @@ impl Phonology {
     ///
     /// ## Parameters
     /// - `has_qu_initial`: true if 'q' precedes 'u' (e.g., "qua" vs "mua")
+    /// - `has_gi_initial`: true if 'gi' + vowel (e.g., "gia" → gi is initial)
     pub fn find_tone_position(
         vowels: &[Vowel],
         has_final_consonant: bool,
         modern: bool,
         has_qu_initial: bool,
+        has_gi_initial: bool,
     ) -> usize {
         let n = vowels.len();
         if n == 0 {
@@ -141,7 +143,8 @@ impl Phonology {
             }
 
             // ia (kìa, mía): i is main vowel, a is off-glide → mark on i
-            if v1.key == keys::I && v2.key == keys::A {
+            // BUT NOT when gi is initial (gia, giau) - then 'i' is part of initial
+            if v1.key == keys::I && v2.key == keys::A && !has_gi_initial {
                 return v1.pos;
             }
 
@@ -316,7 +319,7 @@ mod tests {
     fn test_single_vowel() {
         let vowels = vec![v(keys::A, Modifier::None, 0)];
         assert_eq!(
-            Phonology::find_tone_position(&vowels, false, true, false),
+            Phonology::find_tone_position(&vowels, false, true, false, false),
             0
         );
     }
@@ -326,14 +329,14 @@ mod tests {
         // oa → mark on a (pos 1)
         let vowels = vec![v(keys::O, Modifier::None, 0), v(keys::A, Modifier::None, 1)];
         assert_eq!(
-            Phonology::find_tone_position(&vowels, false, true, false),
+            Phonology::find_tone_position(&vowels, false, true, false, false),
             1
         );
 
         // uy → mark on y (pos 1)
         let vowels = vec![v(keys::U, Modifier::None, 0), v(keys::Y, Modifier::None, 1)];
         assert_eq!(
-            Phonology::find_tone_position(&vowels, false, true, false),
+            Phonology::find_tone_position(&vowels, false, true, false, false),
             1
         );
     }
@@ -343,13 +346,16 @@ mod tests {
         // ua without q (mua) → mark on u (pos 0)
         let vowels = vec![v(keys::U, Modifier::None, 0), v(keys::A, Modifier::None, 1)];
         assert_eq!(
-            Phonology::find_tone_position(&vowels, false, true, false),
+            Phonology::find_tone_position(&vowels, false, true, false, false),
             0
         );
 
         // ua with q (qua) → mark on a (pos 1)
         let vowels = vec![v(keys::U, Modifier::None, 0), v(keys::A, Modifier::None, 1)];
-        assert_eq!(Phonology::find_tone_position(&vowels, false, true, true), 1);
+        assert_eq!(
+            Phonology::find_tone_position(&vowels, false, true, true, false),
+            1
+        );
     }
 
     #[test]
@@ -358,8 +364,16 @@ mod tests {
         // Descending diphthong: i is main vowel, a is off-glide
         let vowels = vec![v(keys::I, Modifier::None, 0), v(keys::A, Modifier::None, 1)];
         assert_eq!(
-            Phonology::find_tone_position(&vowels, false, true, false),
+            Phonology::find_tone_position(&vowels, false, true, false, false),
             0
+        );
+
+        // ia with gi initial (gia, giau) → mark on a (pos 1)
+        // When gi is initial, 'i' is part of initial, 'a' is the only vowel
+        let vowels = vec![v(keys::I, Modifier::None, 0), v(keys::A, Modifier::None, 1)];
+        assert_eq!(
+            Phonology::find_tone_position(&vowels, false, true, false, true),
+            1
         );
     }
 
@@ -368,14 +382,14 @@ mod tests {
         // ai → mark on a (pos 0)
         let vowels = vec![v(keys::A, Modifier::None, 0), v(keys::I, Modifier::None, 1)];
         assert_eq!(
-            Phonology::find_tone_position(&vowels, false, true, false),
+            Phonology::find_tone_position(&vowels, false, true, false, false),
             0
         );
 
         // ao → mark on a (pos 0)
         let vowels = vec![v(keys::A, Modifier::None, 0), v(keys::O, Modifier::None, 1)];
         assert_eq!(
-            Phonology::find_tone_position(&vowels, false, true, false),
+            Phonology::find_tone_position(&vowels, false, true, false, false),
             0
         );
     }
@@ -384,7 +398,10 @@ mod tests {
     fn test_with_final_consonant() {
         // oan → mark on a (pos 1)
         let vowels = vec![v(keys::O, Modifier::None, 0), v(keys::A, Modifier::None, 1)];
-        assert_eq!(Phonology::find_tone_position(&vowels, true, true, false), 1);
+        assert_eq!(
+            Phonology::find_tone_position(&vowels, true, true, false, false),
+            1
+        );
     }
 
     #[test]
@@ -392,7 +409,7 @@ mod tests {
         // ươ → mark on ơ (pos 1)
         let vowels = vec![v(keys::U, Modifier::Horn, 0), v(keys::O, Modifier::Horn, 1)];
         assert_eq!(
-            Phonology::find_tone_position(&vowels, false, true, false),
+            Phonology::find_tone_position(&vowels, false, true, false, false),
             1
         );
 
@@ -402,7 +419,7 @@ mod tests {
             v(keys::E, Modifier::Circumflex, 1),
         ];
         assert_eq!(
-            Phonology::find_tone_position(&vowels, false, true, false),
+            Phonology::find_tone_position(&vowels, false, true, false, false),
             1
         );
     }
@@ -416,7 +433,7 @@ mod tests {
             v(keys::I, Modifier::None, 2),
         ];
         assert_eq!(
-            Phonology::find_tone_position(&vowels, false, true, false),
+            Phonology::find_tone_position(&vowels, false, true, false, false),
             1
         );
 
@@ -427,7 +444,7 @@ mod tests {
             v(keys::I, Modifier::None, 2),
         ];
         assert_eq!(
-            Phonology::find_tone_position(&vowels, false, true, false),
+            Phonology::find_tone_position(&vowels, false, true, false, false),
             1
         );
     }
@@ -439,7 +456,7 @@ mod tests {
         // ưa is NOT a compound vowel (compound is ươ, not ưa)
         // ư has diacritic, a doesn't → mark on ư
         assert_eq!(
-            Phonology::find_tone_position(&vowels, false, true, false),
+            Phonology::find_tone_position(&vowels, false, true, false, false),
             0
         );
     }

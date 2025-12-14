@@ -457,7 +457,8 @@ impl Engine {
         let last_vowel_pos = vowels.last().map(|v| v.pos).unwrap_or(0);
         let has_final = self.has_final_consonant(last_vowel_pos);
         let has_qu = self.has_qu_initial();
-        let pos = Phonology::find_tone_position(&vowels, has_final, true, has_qu);
+        let has_gi = self.has_gi_initial();
+        let pos = Phonology::find_tone_position(&vowels, has_final, true, has_qu, has_gi);
 
         if let Some(c) = self.buf.get_mut(pos) {
             c.mark = mark_val;
@@ -590,7 +591,8 @@ impl Engine {
             let last_vowel_pos = vowels.last().map(|v| v.pos).unwrap_or(0);
             let has_final = self.has_final_consonant(last_vowel_pos);
             let has_qu = self.has_qu_initial();
-            let new_pos = Phonology::find_tone_position(&vowels, has_final, true, has_qu);
+            let has_gi = self.has_gi_initial();
+            let new_pos = Phonology::find_tone_position(&vowels, has_final, true, has_qu, has_gi);
 
             if new_pos != old_pos {
                 if let Some(c) = self.buf.get_mut(old_pos) {
@@ -708,6 +710,11 @@ impl Engine {
     /// Check for qu initial
     fn has_qu_initial(&self) -> bool {
         utils::has_qu_initial(&self.buf)
+    }
+
+    /// Check for gi initial (gi + vowel)
+    fn has_gi_initial(&self) -> bool {
+        utils::has_gi_initial(&self.buf)
     }
 
     /// Rebuild output from position
