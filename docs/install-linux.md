@@ -67,6 +67,11 @@ fcitx5 -r
 
 ## Xử lý sự cố
 
+**Lệnh `gn` không tìm thấy?**
+```bash
+source ~/.bashrc
+```
+
 **Không gõ được tiếng Việt?**
 1. Đăng xuất/đăng nhập lại
 2. Kiểm tra Fcitx5: `pgrep fcitx5 || fcitx5 -d`
