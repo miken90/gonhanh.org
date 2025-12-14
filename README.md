@@ -23,11 +23,11 @@
 
 ## 📥 Tải về & Cài đặt
 
-| Nền tảng | Trạng thái | Tải xuống |
-|:--------:|:----------:|:----------|
-| **macOS** | ✅ Sẵn sàng | [📥 Tải GoNhanh.dmg](https://github.com/khaphanspace/gonhanh.org/releases/latest/download/GoNhanh.dmg) |
-| **Linux** | ✅ Sẵn sàng | [📥 Hướng dẫn cài đặt](docs/install-linux.md) |
-| **Windows** | 🗓️ Sắp ra mắt | [Xem lộ trình](docs/install-windows.md) |
+| Nền tảng | Trạng thái | Tải xuống | Hướng dẫn |
+|:--------:|:----------:|:---------:|:----------|
+| **macOS** | ✅ Sẵn sàng | [📥 Tải GoNhanh.dmg](https://github.com/khaphanspace/gonhanh.org/releases/latest/download/GoNhanh.dmg) | [Xem hướng dẫn](docs/install-macos.md) |
+| **Linux** | 🧪 Beta | — | [Xem hướng dẫn](docs/install-linux.md) |
+| **Windows** | 🗓️ Sắp ra mắt | — | [Xem lộ trình](docs/install-windows.md) |
 
 ## ✨ Tính năng chính
 
