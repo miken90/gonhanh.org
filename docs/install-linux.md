@@ -18,10 +18,10 @@ curl -fsSL https://raw.githubusercontent.com/khaphanspace/gonhanh.org/main/scrip
 
 | Lệnh | Chức năng |
 |------|-----------|
-| `gonhanh` | Toggle bật/tắt |
-| `gonhanh vni` | Chuyển sang VNI |
-| `gonhanh telex` | Chuyển sang Telex |
-| `gonhanh status` | Xem trạng thái |
+| `gn` | Toggle bật/tắt |
+| `gn vni` | Chuyển sang VNI |
+| `gn telex` | Chuyển sang Telex |
+| `gn status` | Xem trạng thái |
 
 ### Telex (mặc định)
 
@@ -54,7 +54,7 @@ curl -fsSL https://raw.githubusercontent.com/khaphanspace/gonhanh.org/main/scrip
 ```bash
 rm -f ~/.local/lib/fcitx5/gonhanh.so ~/.local/lib/libgonhanh_core.so
 rm -f ~/.local/share/fcitx5/addon/gonhanh.conf ~/.local/share/fcitx5/inputmethod/gonhanh.conf
-rm -f ~/.local/bin/gonhanh
+rm -f ~/.local/bin/gn
 rm -rf ~/.config/gonhanh
 fcitx5 -r
 ```

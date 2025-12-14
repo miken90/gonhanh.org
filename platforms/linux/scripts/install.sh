@@ -6,7 +6,7 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 [[ "$1" == "-u" || "$1" == "--uninstall" ]] && {
     rm -f ~/.local/lib/fcitx5/gonhanh.so ~/.local/lib/libgonhanh_core.so
     rm -f ~/.local/share/fcitx5/addon/gonhanh.conf ~/.local/share/fcitx5/inputmethod/gonhanh.conf
-    rm -f ~/.local/bin/gonhanh
+    rm -f ~/.local/bin/gn
     rm -rf ~/.config/gonhanh
     echo "Uninstalled. Run: fcitx5 -r"
     exit 0
@@ -40,6 +40,6 @@ CLI=""
 for p in "$DIR/gonhanh-cli.sh" "$SRC/scripts/gonhanh-cli.sh"; do
     [[ -f "$p" ]] && CLI="$p" && break
 done
-[[ -n "$CLI" ]] && cp "$CLI" ~/.local/bin/gonhanh && chmod +x ~/.local/bin/gonhanh
+[[ -n "$CLI" ]] && cp "$CLI" ~/.local/bin/gn && chmod +x ~/.local/bin/gn
 
 echo "✓ Installed. Run: fcitx5 -r && fcitx5-configtool"

@@ -471,19 +471,22 @@ class MenuBarController: NSObject, NSWindowDelegate {
         }
         // Show app in menu bar temporarily
         NSApp.setActivationPolicy(.regular)
+        setupMainMenu()  // Set menu before showing window
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
-        // Set custom menu after window is shown (override default menu)
-        DispatchQueue.main.async { [weak self] in
+        // Override default menu after window is shown (macOS may reset it)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             self?.setupMainMenu()
         }
-        // Clear auto-focus on TextFields after window is shown
+        // Clear auto-focus on TextFields
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.settingsWindow?.makeFirstResponder(nil)
         }
     }
 
     private func setupMainMenu() {
+        // Clear existing menu first
+        NSApp.mainMenu = nil
         let mainMenu = NSMenu()
 
         // App menu (shows app name in menu bar)

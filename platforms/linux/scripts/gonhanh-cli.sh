@@ -1,6 +1,6 @@
 #!/bin/bash
 # Gõ Nhanh CLI - Simple commands for Vietnamese input
-# Usage: gonhanh [telex|vni|on|off|toggle|status]
+# Usage: gn [telex|vni|on|off|toggle|status]
 
 CONFIG_DIR="$HOME/.config/gonhanh"
 METHOD_FILE="$CONFIG_DIR/method"
@@ -48,11 +48,11 @@ case "$1" in
         echo "Gõ Nhanh - Vietnamese Input Method"
         echo ""
         echo "Cách dùng:"
-        echo "  gonhanh          Toggle bật/tắt tiếng Việt"
-        echo "  gonhanh on       Bật tiếng Việt"
-        echo "  gonhanh off      Tắt tiếng Việt"
-        echo "  gonhanh telex    Chuyển sang Telex"
-        echo "  gonhanh vni      Chuyển sang VNI"
-        echo "  gonhanh status   Xem trạng thái"
+        echo "  gn          Toggle bật/tắt tiếng Việt"
+        echo "  gn on       Bật tiếng Việt"
+        echo "  gn off      Tắt tiếng Việt"
+        echo "  gn telex    Chuyển sang Telex"
+        echo "  gn vni      Chuyển sang VNI"
+        echo "  gn status   Xem trạng thái"
         ;;
 esac
