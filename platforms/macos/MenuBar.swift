@@ -160,7 +160,7 @@ struct MenuItem: View {
 
 // MARK: - Menu Bar Controller
 
-class MenuBarController: NSObject {
+class MenuBarController: NSObject, NSWindowDelegate {
     private var statusItem: NSStatusItem!
 
     private var onboardingWindow: NSWindow?
@@ -325,7 +325,11 @@ class MenuBarController: NSObject {
     @objc private func selectVNI() { menuState.setMethod(.vni) }
 
     @objc private func showAbout() {
-        NotificationCenter.default.post(name: .showSettingsPage, object: NavigationPage.about)
+        showSettings()
+        // Switch to About page after window is shown
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            NotificationCenter.default.post(name: .showSettingsPage, object: NavigationPage.about)
+        }
     }
 
     private func loadSettings() {
@@ -462,26 +466,58 @@ class MenuBarController: NSObject {
             window.isOpaque = false
             window.hasShadow = true
             window.isMovableByWindowBackground = true
+            window.delegate = self
             settingsWindow = window
         }
-        setupMainMenu()
+        // Show app in menu bar temporarily
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
+        // Set custom menu after window is shown (override default menu)
+        DispatchQueue.main.async { [weak self] in
+            self?.setupMainMenu()
+        }
+        // Clear auto-focus on TextFields after window is shown
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.settingsWindow?.makeFirstResponder(nil)
+        }
     }
 
     private func setupMainMenu() {
         let mainMenu = NSMenu()
 
-        // App menu (required for ⌘Q to work)
-        let appMenu = NSMenu()
-        let appMenuItem = NSMenuItem()
+        // App menu (shows app name in menu bar)
+        let appMenu = NSMenu(title: AppMetadata.name)
+        let appMenuItem = NSMenuItem(title: AppMetadata.name, action: nil, keyEquivalent: "")
         appMenuItem.submenu = appMenu
 
-        // Settings (⌘,)
+        // About
+        let aboutItem = NSMenuItem(
+            title: "Về \(AppMetadata.name)",
+            action: #selector(showAbout),
+            keyEquivalent: ""
+        )
+        aboutItem.target = self
+        appMenu.addItem(aboutItem)
+
+        appMenu.addItem(NSMenuItem.separator())
+
+        // Check for updates
+        let updateItem = NSMenuItem(
+            title: "Kiểm tra cập nhật...",
+            action: #selector(checkForUpdates),
+            keyEquivalent: ""
+        )
+        updateItem.target = self
+        appMenu.addItem(updateItem)
+
+        appMenu.addItem(NSMenuItem.separator())
+
+        // Settings
         let settingsItem = NSMenuItem(
             title: "Cài đặt...",
             action: #selector(showSettings),
-            keyEquivalent: ","
+            keyEquivalent: ""
         )
         settingsItem.target = self
         appMenu.addItem(settingsItem)
@@ -497,6 +533,21 @@ class MenuBarController: NSObject {
         appMenu.addItem(quitItem)
 
         mainMenu.addItem(appMenuItem)
+
+        // Edit menu (required for copy/paste in TextFields)
+        let editMenu = NSMenu(title: "Sửa")
+        let editMenuItem = NSMenuItem(title: "Sửa", action: nil, keyEquivalent: "")
+        editMenuItem.submenu = editMenu
+
+        editMenu.addItem(NSMenuItem(title: "Hoàn tác", action: Selector(("undo:")), keyEquivalent: "z"))
+        editMenu.addItem(NSMenuItem(title: "Làm lại", action: Selector(("redo:")), keyEquivalent: "Z"))
+        editMenu.addItem(NSMenuItem.separator())
+        editMenu.addItem(NSMenuItem(title: "Cắt", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: "Sao chép", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: "Dán", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        editMenu.addItem(NSMenuItem(title: "Chọn tất cả", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+
+        mainMenu.addItem(editMenuItem)
         NSApp.mainMenu = mainMenu
     }
 
@@ -517,5 +568,14 @@ class MenuBarController: NSObject {
         // Skip re-check if update is already available (from auto-check)
         if case .available = UpdateManager.shared.state { return }
         UpdateManager.shared.checkForUpdatesManually()
+    }
+
+    // MARK: - NSWindowDelegate
+
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window === settingsWindow else { return }
+        // Revert to background app when settings window closes
+        NSApp.setActivationPolicy(.accessory)
     }
 }

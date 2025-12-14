@@ -815,7 +815,7 @@ struct ShortcutRow: View {
     var body: some View {
         HStack(spacing: 8) {
             TextField("viết tắt", text: $shortcut.key)
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .font(.system(size: 13))
                 .textFieldStyle(.plain)
                 .frame(width: 60)
                 .focused(focusedField, equals: shortcut.id)
