@@ -586,7 +586,7 @@ struct AboutPageView: View {
                 }
                 .font(.system(size: 12))
 
-                Text("Làm với ❤️ từ Việt Nam")
+                Text("Tự hào Việt Nam ❤️")
                     .font(.system(size: 11))
                     .foregroundColor(Color(NSColor.tertiaryLabelColor))
             }
