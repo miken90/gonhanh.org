@@ -31,191 +31,152 @@ private enum Log {
     static func queue(_ msg: String) { write("Q: \(msg)") }
 }
 
-// MARK: - Method Detection
+// MARK: - Constants
 
-private enum Method { case fast, slow, selection, spotlight }
+private enum KeyCode {
+    static let backspace: CGKeyCode = 0x33
+    static let forwardDelete: CGKeyCode = 0x75
+    static let leftArrow: CGKeyCode = 0x7B
+}
 
-// MARK: - Text Injector (Async with Serial Queue)
+// MARK: - Injection Method
+
+private enum InjectionMethod {
+    case fast           // Default: backspace + text with minimal delays
+    case slow           // Terminals/Electron: backspace + text with higher delays
+    case selection      // Browser address bars: Shift+Left select + type replacement
+    case autocomplete   // Spotlight: Forward Delete + backspace + text via proxy
+}
+
+// MARK: - Text Injector
 
 /// Handles text injection with proper sequencing to prevent race conditions
 private class TextInjector {
     static let shared = TextInjector()
 
-    /// Serial queue ensures text injections happen one at a time
-    private let queue = DispatchQueue(label: "org.gonhanh.textinjector", qos: .userInteractive)
-
     /// Semaphore to block keyboard callback until injection completes
-    private let completionSemaphore = DispatchSemaphore(value: 1)
-
-    /// Track if currently processing to handle rapid keystrokes
-    private var isProcessing = false
+    private let semaphore = DispatchSemaphore(value: 1)
 
     private init() {}
 
     /// Inject text replacement synchronously (blocks until complete)
-    /// This ensures the next keystroke waits for current injection to finish
-    func injectSync(backspace bs: Int, text: String, method: Method, delays: (UInt32, UInt32, UInt32), proxy: CGEventTapProxy) {
-        // Wait for any previous injection to complete
-        completionSemaphore.wait()
-        defer { completionSemaphore.signal() }
-
-        isProcessing = true
-        defer { isProcessing = false }
-
-        Log.queue("start bs=\(bs) text=\"\(text)\"")
+    func injectSync(bs: Int, text: String, method: InjectionMethod, delays: (UInt32, UInt32, UInt32), proxy: CGEventTapProxy) {
+        semaphore.wait()
+        defer { semaphore.signal() }
 
         switch method {
         case .selection:
-            performSelectionInjection(bs: bs, text: text, delays: delays)
-        case .spotlight:
-            performSpotlightInjection(bs: bs, text: text, proxy: proxy)
+            injectViaSelection(bs: bs, text: text, delays: delays)
+        case .autocomplete:
+            injectViaAutocomplete(bs: bs, text: text, proxy: proxy)
         case .slow, .fast:
-            performBackspaceInjection(bs: bs, text: text, delays: delays)
+            injectViaBackspace(bs: bs, text: text, delays: delays)
         }
 
-        // Additional settle time for slow apps
-        let settleTime: UInt32 = method == .slow ? 20000 : 5000  // 20ms or 5ms
-        usleep(settleTime)
-
-        Log.queue("done")
+        // Settle time: 20ms for slow apps, 5ms for others
+        usleep(method == .slow ? 20000 : 5000)
     }
 
-    private func performBackspaceInjection(bs: Int, text: String, delays: (UInt32, UInt32, UInt32)) {
+    // MARK: - Injection Methods
+
+    /// Standard backspace injection: delete N chars, then type replacement
+    private func injectViaBackspace(bs: Int, text: String, delays: (UInt32, UInt32, UInt32)) {
         guard let src = CGEventSource(stateID: .privateState) else { return }
 
-        // Send backspaces
         for _ in 0..<bs {
-            guard let dn = CGEvent(keyboardEventSource: src, virtualKey: 0x33, keyDown: true),
-                  let up = CGEvent(keyboardEventSource: src, virtualKey: 0x33, keyDown: false) else { continue }
-            dn.setIntegerValueField(.eventSourceUserData, value: kEventMarker)
-            up.setIntegerValueField(.eventSourceUserData, value: kEventMarker)
-            dn.post(tap: .cgSessionEventTap)
-            up.post(tap: .cgSessionEventTap)
+            postKey(KeyCode.backspace, source: src)
             usleep(delays.0)
         }
-
-        // Wait after backspaces
         if bs > 0 { usleep(delays.1) }
 
-        // Send text in chunks (CGEvent has 20-char limit for keyboardSetUnicodeString)
-        let utf16 = Array(text.utf16)
-        let chunkSize = 20
-        var offset = 0
-
-        while offset < utf16.count {
-            let end = min(offset + chunkSize, utf16.count)
-            let chunk = Array(utf16[offset..<end])
-
-            guard let dn = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: true),
-                  let up = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: false) else { break }
-            dn.setIntegerValueField(.eventSourceUserData, value: kEventMarker)
-            up.setIntegerValueField(.eventSourceUserData, value: kEventMarker)
-            dn.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: chunk)
-            up.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: chunk)
-            dn.post(tap: .cgSessionEventTap)
-            up.post(tap: .cgSessionEventTap)
-            usleep(delays.2)
-
-            offset = end
-        }
-
+        postText(text, source: src, delay: delays.2)
         Log.send("bs", bs, text)
     }
 
-    private func performSelectionInjection(bs: Int, text: String, delays: (UInt32, UInt32, UInt32)) {
+    /// Selection injection: Shift+Left to select, then type replacement (for browser address bars)
+    private func injectViaSelection(bs: Int, text: String, delays: (UInt32, UInt32, UInt32)) {
         guard let src = CGEventSource(stateID: .privateState) else { return }
 
-        // Use delays if provided, otherwise use defaults
-        let selDelay: UInt32 = delays.0 > 0 ? delays.0 : 1000      // Between each Shift+Left
-        let waitDelay: UInt32 = delays.1 > 0 ? delays.1 : 3000     // After all selections
-        let textDelay: UInt32 = delays.2 > 0 ? delays.2 : 2000     // After each text chunk
+        let selDelay = delays.0 > 0 ? delays.0 : 1000
+        let waitDelay = delays.1 > 0 ? delays.1 : 3000
+        let textDelay = delays.2 > 0 ? delays.2 : 2000
 
-        // Select characters with Shift+Left
         for _ in 0..<bs {
-            guard let dn = CGEvent(keyboardEventSource: src, virtualKey: 0x7B, keyDown: true),
-                  let up = CGEvent(keyboardEventSource: src, virtualKey: 0x7B, keyDown: false) else { continue }
-            dn.setIntegerValueField(.eventSourceUserData, value: kEventMarker)
-            up.setIntegerValueField(.eventSourceUserData, value: kEventMarker)
-            dn.flags = .maskShift
-            up.flags = .maskShift
-            dn.post(tap: .cgSessionEventTap)
-            up.post(tap: .cgSessionEventTap)
+            postKey(KeyCode.leftArrow, source: src, flags: .maskShift)
             usleep(selDelay)
         }
-
-        // Delay after selection
         if bs > 0 { usleep(waitDelay) }
 
-        // Type replacement text in chunks (CGEvent has 20-char limit)
+        postText(text, source: src, delay: textDelay)
+        Log.send("sel", bs, text)
+    }
+
+    /// Autocomplete injection: Forward Delete to clear suggestion, then backspace + text via proxy
+    /// Used for Spotlight where autocomplete auto-selects suggestion text after cursor
+    private func injectViaAutocomplete(bs: Int, text: String, proxy: CGEventTapProxy) {
+        guard let src = CGEventSource(stateID: .privateState) else { return }
+
+        // Forward Delete clears auto-selected suggestion
+        postKey(KeyCode.forwardDelete, source: src, proxy: proxy)
+        usleep(3000)
+
+        // Backspaces remove typed characters
+        for _ in 0..<bs {
+            postKey(KeyCode.backspace, source: src, proxy: proxy)
+            usleep(1000)
+        }
+        if bs > 0 { usleep(5000) }
+
+        // Type replacement text
+        postText(text, source: src, proxy: proxy)
+        Log.send("auto", bs, text)
+    }
+
+    // MARK: - Helpers
+
+    /// Post a single key press event
+    private func postKey(_ keyCode: CGKeyCode, source: CGEventSource, flags: CGEventFlags = [], proxy: CGEventTapProxy? = nil) {
+        guard let dn = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
+              let up = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else { return }
+        dn.setIntegerValueField(.eventSourceUserData, value: kEventMarker)
+        up.setIntegerValueField(.eventSourceUserData, value: kEventMarker)
+        if !flags.isEmpty { dn.flags = flags; up.flags = flags }
+
+        if let proxy = proxy {
+            dn.tapPostEvent(proxy)
+            up.tapPostEvent(proxy)
+        } else {
+            dn.post(tap: .cgSessionEventTap)
+            up.post(tap: .cgSessionEventTap)
+        }
+    }
+
+    /// Post text in chunks (CGEvent has 20-char limit)
+    private func postText(_ text: String, source: CGEventSource, delay: UInt32 = 0, proxy: CGEventTapProxy? = nil) {
         let utf16 = Array(text.utf16)
-        let chunkSize = 20
         var offset = 0
 
         while offset < utf16.count {
-            let end = min(offset + chunkSize, utf16.count)
+            let end = min(offset + 20, utf16.count)
             let chunk = Array(utf16[offset..<end])
 
-            guard let dn = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: true),
-                  let up = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: false) else { break }
+            guard let dn = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+                  let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else { break }
             dn.setIntegerValueField(.eventSourceUserData, value: kEventMarker)
             up.setIntegerValueField(.eventSourceUserData, value: kEventMarker)
             dn.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: chunk)
             up.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: chunk)
-            dn.post(tap: .cgSessionEventTap)
-            up.post(tap: .cgSessionEventTap)
-            usleep(textDelay)
 
+            if let proxy = proxy {
+                dn.tapPostEvent(proxy)
+                up.tapPostEvent(proxy)
+            } else {
+                dn.post(tap: .cgSessionEventTap)
+                up.post(tap: .cgSessionEventTap)
+            }
+            if delay > 0 { usleep(delay) }
             offset = end
         }
-
-        Log.send("sel", bs, text)
-    }
-
-    /// Special injection for apps with autocomplete (Spotlight, Chrome address bar)
-    /// These apps auto-select suggestion text after cursor, so backspace deletes suggestion instead of typed text
-    /// Solution: Send Forward Delete (0x75) first to clear suggestion, then backspace to remove typed chars
-    /// Uses tapPostEvent(proxy) for proper event sequencing through the same event tap
-    private func performSpotlightInjection(bs: Int, text: String, proxy: CGEventTapProxy) {
-        guard let src = CGEventSource(stateID: .privateState) else { return }
-
-        // Step 1: Send Forward Delete to clear auto-selected suggestion
-        if let fwdDn = CGEvent(keyboardEventSource: src, virtualKey: 0x75, keyDown: true),
-           let fwdUp = CGEvent(keyboardEventSource: src, virtualKey: 0x75, keyDown: false) {
-            fwdDn.setIntegerValueField(.eventSourceUserData, value: kEventMarker)
-            fwdUp.setIntegerValueField(.eventSourceUserData, value: kEventMarker)
-            fwdDn.tapPostEvent(proxy)
-            fwdUp.tapPostEvent(proxy)
-            usleep(3000)  // 3ms
-            Log.info("spotlight: fwd-delete sent via proxy")
-        }
-
-        // Step 2: Send backspaces to remove typed characters
-        for i in 0..<bs {
-            guard let dn = CGEvent(keyboardEventSource: src, virtualKey: 0x33, keyDown: true),
-                  let up = CGEvent(keyboardEventSource: src, virtualKey: 0x33, keyDown: false) else { continue }
-            dn.setIntegerValueField(.eventSourceUserData, value: kEventMarker)
-            up.setIntegerValueField(.eventSourceUserData, value: kEventMarker)
-            dn.tapPostEvent(proxy)
-            up.tapPostEvent(proxy)
-            usleep(1000)  // 1ms between backspaces
-            Log.info("spotlight: bs[\(i+1)/\(bs)] via proxy")
-        }
-
-        // Wait after backspaces
-        if bs > 0 { usleep(5000) }  // 5ms
-
-        // Step 3: Send replacement text
-        let utf16 = Array(text.utf16)
-        guard let dn = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: true),
-              let up = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: false) else { return }
-        dn.setIntegerValueField(.eventSourceUserData, value: kEventMarker)
-        up.setIntegerValueField(.eventSourceUserData, value: kEventMarker)
-        dn.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
-        up.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
-        dn.tapPostEvent(proxy)
-        up.tapPostEvent(proxy)
-
-        Log.send("spotlight-proxy", bs, text)
     }
 }
 
@@ -508,7 +469,7 @@ private func keyboardCallback(
 
 // MARK: - Text Replacement
 
-private func detectMethod() -> (Method, (UInt32, UInt32, UInt32)) {
+private func detectMethod() -> (InjectionMethod, (UInt32, UInt32, UInt32)) {
     // Get focused element and its owning app (works for overlays like Spotlight)
     let systemWide = AXUIElementCreateSystemWide()
     var focused: CFTypeRef?
@@ -547,8 +508,8 @@ private func detectMethod() -> (Method, (UInt32, UInt32, UInt32)) {
     if role == "AXComboBox" { Log.method("sel:combo"); return (.selection, (0, 0, 0)) }
     if role == "AXSearchField" { Log.method("sel:search"); return (.selection, (0, 0, 0)) }
 
-    // Spotlight - use special method with HID tap and conservative timing
-    if bundleId == "com.apple.Spotlight" { Log.method("hid:spotlight"); return (.spotlight, (0, 0, 0)) }
+    // Spotlight - use autocomplete method with Forward Delete to clear suggestions
+    if bundleId == "com.apple.Spotlight" { Log.method("auto:spotlight"); return (.autocomplete, (0, 0, 0)) }
 
     // Browser address bars (AXTextField with autocomplete)
     let browsers = ["com.google.Chrome", "com.apple.Safari", "company.thebrowser.Browser"]
@@ -585,7 +546,7 @@ private func sendReplacement(backspace bs: Int, chars: [Character], proxy: CGEve
     let str = String(chars)
 
     // Use TextInjector for synchronized text injection
-    TextInjector.shared.injectSync(backspace: bs, text: str, method: method, delays: delays, proxy: proxy)
+    TextInjector.shared.injectSync(bs: bs, text: str, method: method, delays: delays, proxy: proxy)
 }
 
 // MARK: - Excluded Apps Manager
