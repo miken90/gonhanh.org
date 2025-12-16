@@ -91,6 +91,8 @@ pub struct Engine {
     enabled: bool,
     last_transform: Option<Transform>,
     shortcuts: ShortcutTable,
+    /// Raw keystroke history for ESC restore (key, caps)
+    raw_input: Vec<(u16, bool)>,
 }
 
 impl Default for Engine {
@@ -107,6 +109,7 @@ impl Engine {
             enabled: true,
             last_transform: None,
             shortcuts: ShortcutTable::with_defaults(),
+            raw_input: Vec::with_capacity(64),
         }
     }
 
@@ -157,30 +160,40 @@ impl Engine {
     /// * `shift` - true if Shift key is pressed (for symbols like @, #, $)
     pub fn on_key_ext(&mut self, key: u16, caps: bool, ctrl: bool, shift: bool) -> Result {
         if !self.enabled || ctrl {
-            self.buf.clear();
-            self.last_transform = None;
+            self.clear();
             return Result::none();
         }
 
         // Check for word boundary shortcuts ONLY on SPACE
         if key == keys::SPACE {
             let result = self.try_word_boundary_shortcut();
-            self.buf.clear();
-            self.last_transform = None;
+            self.clear();
+            return result;
+        }
+
+        // ESC key: restore to raw ASCII (undo all Vietnamese transforms)
+        if key == keys::ESC {
+            let result = self.restore_to_raw();
+            self.clear();
             return result;
         }
 
         // Other break keys (punctuation, arrows, etc.) just clear buffer
         if keys::is_break(key) {
-            self.buf.clear();
-            self.last_transform = None;
+            self.clear();
             return Result::none();
         }
 
         if key == keys::DELETE {
             self.buf.pop();
+            self.raw_input.pop();
             self.last_transform = None;
             return Result::none();
+        }
+
+        // Record raw keystroke for ESC restore (letters and numbers only)
+        if keys::is_letter(key) || keys::is_number(key) {
+            self.raw_input.push((key, caps));
         }
 
         self.process(key, caps, shift)
@@ -893,10 +906,46 @@ impl Engine {
         }
     }
 
-    /// Clear buffer
+    /// Clear buffer and raw input history
     pub fn clear(&mut self) {
         self.buf.clear();
+        self.raw_input.clear();
         self.last_transform = None;
+    }
+
+    /// Restore buffer to raw ASCII (undo all Vietnamese transforms)
+    ///
+    /// Called when ESC is pressed. Replaces transformed output with original keystrokes.
+    /// Example: "tẽt" (from typing "text" in Telex) → "text"
+    fn restore_to_raw(&self) -> Result {
+        if self.raw_input.is_empty() || self.buf.is_empty() {
+            return Result::none();
+        }
+
+        // Check if any transforms were applied
+        let has_transforms = self
+            .buf
+            .iter()
+            .any(|c| c.tone > 0 || c.mark > 0 || c.stroke);
+        if !has_transforms {
+            return Result::none();
+        }
+
+        // Build raw ASCII output from raw_input history
+        let raw_chars: Vec<char> = self
+            .raw_input
+            .iter()
+            .filter_map(|&(key, caps)| utils::key_to_char(key, caps))
+            .collect();
+
+        if raw_chars.is_empty() {
+            return Result::none();
+        }
+
+        // Backspace count = current buffer length (displayed chars)
+        let backspace = self.buf.len() as u8;
+
+        Result::send(backspace, &raw_chars)
     }
 }
 
@@ -937,6 +986,23 @@ mod tests {
     const TELEX_COMPOUND: &[(&str, &str)] =
         &[("duocw", "dươc"), ("nguoiw", "ngươi"), ("tuoiws", "tưới")];
 
+    // ESC restore test cases: input with ESC (\x1b) → expected raw ASCII
+    // ESC restores to exactly what user typed (including modifier keys)
+    const TELEX_ESC_RESTORE: &[(&str, &str)] = &[
+        ("text\x1b", "text"),     // tẽt → text
+        ("user\x1b", "user"),     // úẻ → user
+        ("esc\x1b", "esc"),       // éc → esc
+        ("dd\x1b", "dd"),         // đ → dd (stroke restore)
+        ("vieejt\x1b", "vieejt"), // việt → vieejt (all typed keys)
+        ("Vieejt\x1b", "Vieejt"), // Việt → Vieejt (preserve case)
+    ];
+
+    const VNI_ESC_RESTORE: &[(&str, &str)] = &[
+        ("a1\x1b", "a1"),         // á → a1
+        ("vie65t\x1b", "vie65t"), // việt → vie65t
+        ("d9\x1b", "d9"),         // đ → d9
+    ];
+
     #[test]
     fn test_telex_basic() {
         telex(TELEX_BASIC);
@@ -950,5 +1016,15 @@ mod tests {
     #[test]
     fn test_telex_compound() {
         telex(TELEX_COMPOUND);
+    }
+
+    #[test]
+    fn test_telex_esc_restore() {
+        telex(TELEX_ESC_RESTORE);
+    }
+
+    #[test]
+    fn test_vni_esc_restore() {
+        vni(VNI_ESC_RESTORE);
     }
 }

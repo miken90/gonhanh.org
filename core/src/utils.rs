@@ -173,7 +173,8 @@ mod test_utils {
             '`' => keys::BACKQUOTE,
             '<' => keys::DELETE,
             ' ' => keys::SPACE,
-            _ => 255, // Unknown/Other
+            '\x1b' => keys::ESC, // ESC character
+            _ => 255,            // Unknown/Other
         }
     }
 
@@ -196,6 +197,22 @@ mod test_utils {
             if key == keys::DELETE {
                 screen.pop();
                 e.on_key(key, false, false);
+                continue;
+            }
+
+            // ESC key: restore to raw ASCII
+            if key == keys::ESC {
+                let r = e.on_key(key, false, false);
+                if r.action == Action::Send as u8 {
+                    for _ in 0..r.backspace {
+                        screen.pop();
+                    }
+                    for i in 0..r.count as usize {
+                        if let Some(ch) = char::from_u32(r.chars[i]) {
+                            screen.push(ch);
+                        }
+                    }
+                }
                 continue;
             }
 

@@ -10,7 +10,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-macOS-000000?logo=apple&logoColor=white" />
   <img src="https://img.shields.io/badge/Platform-Linux-FCC624?logo=linux&logoColor=black" />
-  <img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg" alt="License: GPL-3.0">
+  <img src="https://img.shields.io/badge/License-BSD--3--Clause-blue.svg" alt="License: BSD-3-Clause">
   <img src="https://github.com/khaphanspace/gonhanh.org/actions/workflows/ci.yml/badge.svg" alt="CI">
 </p>
 
@@ -35,14 +35,21 @@
 
 ## ✨ Tính năng
 
+### 🔥 Highlight
+
+- ⎋ **ESC khôi phục** — Gõ `user` → `úẻ` → nhấn **ESC** → `user`. Không cần tắt bộ gõ khi gõ tiếng Anh!
+- 🔤 **Tự nhận diện** — `fix` `just` `fuji` `shisa` → giữ nguyên. Thông minh phân biệt Anh/Việt
+- 🔍 **Fix lỗi Chrome/Spotlight** — Tự động sửa dính chữ trong address bar, thanh tìm kiếm
+- ⚡ **Siêu nhanh** — <1ms latency · ~5MB RAM. Nhanh hơn bạn gõ
+
+### 📋 Đầy đủ
+
 - ⌨️ **Telex & VNI** — Chọn kiểu gõ quen thuộc
-- 🎯 **Đặt dấu đúng vị trí** — Tự động theo [Quy tắc đặt dấu thanh mới](https://vi.wikipedia.org/wiki/Quy_t%E1%BA%AFc_%C4%91%E1%BA%B7t_d%E1%BA%A5u_thanh_c%E1%BB%A7a_ch%E1%BB%AF_Qu%E1%BB%91c_ng%E1%BB%AF) (`hoà`, `khoẻ`, `thuỷ` , thay cho `hòa`, `khỏe`, `thủy`...)
-- 🔤 **Nhận diện tiếng Anh** — `Windows`, `Fix` không bị thêm dấu
+- 🎯 **Đặt dấu chuẩn** — Tự động theo [quy tắc mới](https://vi.wikipedia.org/wiki/Quy_t%E1%BA%AFc_%C4%91%E1%BA%B7t_d%E1%BA%A5u_thanh_c%E1%BB%A7a_ch%E1%BB%AF_Qu%E1%BB%91c_ng%E1%BB%AF): `hoà`, `khoẻ`, `thuỷ`
 - ✂️ **Gõ tắt** — `vn` → `Việt Nam`, `ko` → `không`
-- ⚡ **Nhanh & Nhẹ** — <1ms · ~5MB RAM
-- 🌗 **Dark/Light** — Tự động theo hệ thống
-- 🔌 **Tương thích mọi app** — Terminal, VS Code, Chrome, Word, Excel...
-- 💻 **Đa nền tảng** — macOS, Linux, Windows (sắp ra mắt)
+- 🔌 **Mọi app** — VS Code, Zed, Chrome, Notion, Terminal, Ghostty...
+- 🌗 **Dark/Light** — Theo hệ thống
+- 💻 **Đa nền tảng** — macOS, Linux, Windows (beta)
 
 ### 🛡️ Cam kết "Ba Không"
 
@@ -54,6 +61,7 @@
 
 | Vấn đề thường gặp | Bộ gõ khác | Gõ Nhanh |
 |:------------------|:----------:|:--------:|
+| Gõ tiếng Anh xen kẽ | ⚠️ Phải tắt/bật bộ gõ | ✅ Nhấn `ESC` khôi phục |
 | Dính chữ trên Chrome/Edge | ⚠️ Phải tắt autocomplete | ✅ Tự động fix |
 | Lặp chữ trên Google Docs | ⚠️ Phải bật "Sửa lỗi" | ✅ Tự động fix |
 | Nhảy chữ trên Terminal | ❌ Không hỗ trợ tốt | ✅ Hoạt động tốt |
@@ -131,4 +139,4 @@ make install   # Copy vào /Applications
 
 ## 📄 License
 
-Copyright © 2025 Gõ Nhanh Contributors. [GNU GPLv3](LICENSE).
+Copyright © 2025 Gõ Nhanh Contributors. [BSD-3-Clause](LICENSE).
