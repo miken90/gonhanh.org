@@ -972,6 +972,101 @@ fn shortcut_not_triggered_by_letter() {
     );
 }
 
+/// Bug: Shortcut should NOT trigger when preceded by numbers
+/// e.g., "149k" should NOT expand "k" → "không"
+#[test]
+fn shortcut_not_triggered_after_numbers() {
+    let mut e = Engine::new();
+    e.set_method(0); // Telex
+    e.shortcuts_mut().add(Shortcut::new("k", "không"));
+
+    // Type "149k" + SPACE - should NOT trigger shortcut
+    e.on_key(keys::N1, false, false);
+    e.on_key(keys::N4, false, false);
+    e.on_key(keys::N9, false, false);
+    e.on_key(keys::K, false, false);
+    let r = e.on_key(keys::SPACE, false, false);
+
+    // Should NOT trigger shortcut
+    assert_eq!(
+        r.action,
+        Action::None as u8,
+        "shortcut 'k' should NOT trigger after '149'"
+    );
+}
+
+/// Bug: Shortcut should NOT trigger after single number
+/// e.g., "1k" should NOT expand "k" → "không"
+#[test]
+fn shortcut_not_triggered_after_single_number() {
+    let mut e = Engine::new();
+    e.set_method(0);
+    e.shortcuts_mut().add(Shortcut::new("a", "anh"));
+
+    // Type "1a" + SPACE
+    e.on_key(keys::N1, false, false);
+    e.on_key(keys::A, false, false);
+    let r = e.on_key(keys::SPACE, false, false);
+
+    assert_eq!(
+        r.action,
+        Action::None as u8,
+        "shortcut 'a' should NOT trigger after '1'"
+    );
+}
+
+/// Bug: Shortcut should NOT trigger after backspace into previous word
+/// "đa" + SPACE + backspace×2 + "a" should NOT expand "a" → "anh"
+#[test]
+fn shortcut_not_triggered_after_backspace_into_previous_word() {
+    let mut e = Engine::new();
+    e.set_method(0);
+    e.shortcuts_mut().add(Shortcut::new("a", "anh"));
+
+    // Type "đa" (simulated as d+d+a for Telex)
+    e.on_key(keys::D, false, false);
+    e.on_key(keys::D, false, false);
+    e.on_key(keys::A, false, false);
+
+    // SPACE - clears buffer
+    e.on_key(keys::SPACE, false, false);
+
+    // Backspace twice - deleting into previous word territory
+    e.on_key(keys::DELETE, false, false);
+    e.on_key(keys::DELETE, false, false);
+
+    // Type "a"
+    e.on_key(keys::A, false, false);
+
+    // SPACE - should NOT trigger shortcut
+    let r = e.on_key(keys::SPACE, false, false);
+
+    assert_eq!(
+        r.action,
+        Action::None as u8,
+        "shortcut 'a' should NOT trigger after backspace into previous word"
+    );
+}
+
+/// Bug: Standalone shortcut should still work
+/// "k" alone should expand to "không"
+#[test]
+fn shortcut_works_standalone() {
+    let mut e = Engine::new();
+    e.set_method(0);
+    e.shortcuts_mut().add(Shortcut::new("k", "không"));
+
+    // Type "k" + SPACE - should trigger
+    e.on_key(keys::K, false, false);
+    let r = e.on_key(keys::SPACE, false, false);
+
+    assert_eq!(r.action, Action::Send as u8, "shortcut 'k' should trigger");
+    let chars: String = (0..r.count as usize)
+        .map(|i| char::from_u32(r.chars[i]).unwrap_or('?'))
+        .collect();
+    assert_eq!(chars, "không ");
+}
+
 /// Issue #23: Shortcut "zz" should work in Telex mode
 /// Even though "z" is a remove modifier, when there's nothing to remove,
 /// it should be added to buffer so shortcuts like "zz" can trigger.
@@ -1032,21 +1127,21 @@ fn z_still_removes_marks_in_telex() {
 fn telex_doc_all_combinations() {
     // Standard patterns - dd at start
     telex(&[
-        ("ddojc", "đọc"),  // dd + oj + c (most common)
-        ("ddocj", "đọc"),  // dd + oc + j (mark at end)
+        ("ddojc", "đọc"), // dd + oj + c (most common)
+        ("ddocj", "đọc"), // dd + oc + j (mark at end)
     ]);
 
     // D-postfix patterns - one d at start, stroke applied at end
     telex(&[
-        ("dojcd", "đọc"),  // d + oj + c + d (stroke at end)
-        ("docjd", "đọc"),  // d + oc + j + d (mark then stroke at end)
-        ("docdj", "đọc"),  // d + oc + d + j (stroke then mark at end)
+        ("dojcd", "đọc"), // d + oj + c + d (stroke at end)
+        ("docjd", "đọc"), // d + oc + j + d (mark then stroke at end)
+        ("docdj", "đọc"), // d + oc + d + j (stroke then mark at end)
     ]);
 
     // Mixed order - d after vowel but before final consonant
     telex(&[
-        ("dojdc", "đọc"),  // d + oj + d + c
-        ("dodjc", "đọc"),  // d + od + j + c (stroke mid-word)
+        ("dojdc", "đọc"), // d + oj + d + c
+        ("dodjc", "đọc"), // d + od + j + c (stroke mid-word)
     ]);
 }
 
@@ -1080,32 +1175,26 @@ fn telex_similar_words_to_doc() {
         ("ddaau", "đâu"),
         ("dduowcj", "được"),
         ("dduwowngf", "đường"),
-
         // Words with ọ (o + nặng, no circumflex)
-        ("hojc", "học"),      // học uses ọ not ộ
+        ("hojc", "học"), // học uses ọ not ộ
         ("tojp", "tọp"),
         ("lojm", "lọm"),
         ("sojt", "sọt"),
-
         // Words with ộ (ô + nặng = circumflex + nặng)
-        ("toojt", "tột"),     // tột uses ộ
-        ("loojn", "lộn"),     // lộn uses ộ
-        ("coojt", "cột"),     // cột uses ộ
-
+        ("toojt", "tột"), // tột uses ộ
+        ("loojn", "lộn"), // lộn uses ộ
+        ("coojt", "cột"), // cột uses ộ
         // Words with đ + ọ (o + nặng, no circumflex)
-        ("ddojc", "đọc"),     // đọc uses ọ
-
+        ("ddojc", "đọc"), // đọc uses ọ
         // Words with đ + ộ (ô + nặng)
-        ("ddooj", "độ"),      // độ uses ộ (circumflex + nặng)
-
+        ("ddooj", "độ"), // độ uses ộ (circumflex + nặng)
         // Words with đ + other marks on o
-        ("ddor", "đỏ"),       // đ + ỏ (hỏi)
-        ("ddos", "đó"),       // đ + ó (sắc)
-        ("ddoof", "đồ"),      // đ + ồ (circumflex + huyền)
-        ("ddoox", "đỗ"),      // đ + ỗ (circumflex + ngã)
-
+        ("ddor", "đỏ"),  // đ + ỏ (hỏi)
+        ("ddos", "đó"),  // đ + ó (sắc)
+        ("ddoof", "đồ"), // đ + ồ (circumflex + huyền)
+        ("ddoox", "đỗ"), // đ + ỗ (circumflex + ngã)
         // Longer words with đọc pattern
-        ("ddojcc", "đọcc"),   // extra c - passthrough
+        ("ddojcc", "đọcc"), // extra c - passthrough
     ]);
 }
 
@@ -1113,9 +1202,9 @@ fn telex_similar_words_to_doc() {
 #[test]
 fn telex_doc_uppercase() {
     telex(&[
-        ("Ddojc", "Đọc"),     // Capital Đ
-        ("DDOJC", "ĐỌC"),     // All caps
-        ("DDojc", "Đọc"),     // DD at start, rest lowercase
+        ("Ddojc", "Đọc"), // Capital Đ
+        ("DDOJC", "ĐỌC"), // All caps
+        ("DDojc", "Đọc"), // DD at start, rest lowercase
     ]);
 }
 
@@ -1123,7 +1212,7 @@ fn telex_doc_uppercase() {
 #[test]
 fn telex_doc_in_sentence() {
     telex(&[
-        ("ddojc ", "đọc "),   // with trailing space
+        ("ddojc ", "đọc "), // with trailing space
     ]);
 
     // Multi-word test

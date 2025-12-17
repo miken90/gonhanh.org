@@ -95,6 +95,9 @@ pub struct Engine {
     raw_input: Vec<(u16, bool)>,
     /// Raw mode: skip Vietnamese transforms after prefix chars (@ # $ ^ : > ?)
     raw_mode: bool,
+    /// True if current word has non-letter characters before letters
+    /// Used to prevent false shortcut matches (e.g., "149k" should not match "k")
+    has_non_letter_prefix: bool,
 }
 
 impl Default for Engine {
@@ -113,6 +116,7 @@ impl Engine {
             shortcuts: ShortcutTable::with_defaults(),
             raw_input: Vec::with_capacity(64),
             raw_mode: false,
+            has_non_letter_prefix: false,
         }
     }
 
@@ -214,6 +218,12 @@ impl Engine {
         }
 
         if key == keys::DELETE {
+            // If buffer is already empty, user is deleting content from previous word
+            // that we don't track. Mark this to prevent false shortcut matches.
+            // e.g., "đa" + SPACE + backspace×2 + "a" should NOT match shortcut "a"
+            if self.buf.is_empty() {
+                self.has_non_letter_prefix = true;
+            }
             self.buf.pop();
             self.raw_input.pop();
             self.last_transform = None;
@@ -294,6 +304,12 @@ impl Engine {
     /// Try word boundary shortcuts (triggered by space, punctuation, etc.)
     fn try_word_boundary_shortcut(&mut self) -> Result {
         if self.buf.is_empty() {
+            return Result::none();
+        }
+
+        // Don't trigger shortcut if word has non-letter prefix
+        // e.g., "149k" should NOT match shortcut "k"
+        if self.has_non_letter_prefix {
             return Result::none();
         }
 
@@ -846,7 +862,11 @@ impl Engine {
                 }
             }
         } else {
-            self.buf.clear();
+            // Non-letter character (number, symbol, etc.)
+            // Mark that this word has non-letter prefix to prevent false shortcut matches
+            // e.g., "149k" should NOT trigger shortcut "k" → "không"
+            // e.g., "@abc" should NOT trigger shortcut "abc"
+            self.has_non_letter_prefix = true;
         }
         Result::none()
     }
@@ -955,6 +975,7 @@ impl Engine {
         self.raw_input.clear();
         self.last_transform = None;
         self.raw_mode = false;
+        self.has_non_letter_prefix = false;
     }
 
     /// Restore buffer to raw ASCII (undo all Vietnamese transforms)
