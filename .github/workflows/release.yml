@@ -177,17 +177,17 @@ jobs:
               strategy :github_latest
             end
 
-            app "Gõ Nhanh.app"
+            app "GoNhanh.app"
 
             postflight do
               system_command "/usr/bin/xattr",
-                             args: ["-cr", "#{appdir}/Gõ Nhanh.app"],
+                             args: ["-cr", "#{appdir}/GoNhanh.app"],
                              sudo: false
             end
 
             zap trash: [
               "~/Library/Preferences/space.khaphan.gonhanh.plist",
-              "~/Library/Application Support/Gõ Nhanh",
+              "~/Library/Application Support/GoNhanh",
             ]
           end
           EOF
