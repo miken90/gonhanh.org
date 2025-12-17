@@ -38,10 +38,10 @@
 ### 🔥 Highlight
 
 - 🔍 **Fix lỗi Chrome/Spotlight/Claude Code/JetBrains** - Tự động sửa dính chữ trong address bar, thanh tìm kiếm
-- 🔤 **Tự nhận diện** — `fix` `just` `fuji` `shisa` → giữ nguyên. Tự phân biệt Anh/Việt
+- 🔤 **Auto-restore tiếng Anh** — Gõ `text` `expect` `user` `push` `sort` → tự khôi phục khi nhấn space. [Xem chi tiết ↓](#-auto-restore-tiếng-anh)
 - ⎋ **Gõ ESC tự khôi phục** — Gõ `user` → `úẻ` → nhấn **ESC** → `user`. Không cần tắt bộ gõ khi gõ tiếng Anh!
 - 🧠 **Chuyển chế độ thông minh** — Tự nhớ ON/OFF cho từng app. Code trên VS Code (tắt) → Chat trên Slack (bật) → tự chuyển
-- 🏷️ **Hỗ trợ raw mode**: gõ `@`, `#`, `:`, `/` ở đầu để tắt chuyển đổi tiếng Việt (ví dụ: `@goon` → `@goon` thay vì `@gôn`)
+- 🏷️ **Hỗ trợ raw mode**: gõ `\`, `@`, `#`, `:`, `/` ở đầu để tắt chuyển đổi tiếng Việt (ví dụ: `\mix` → `mix`)
 - ⚡ **Siêu nhanh** — <1ms latency · ~5MB RAM. Hỗ trợ đa nền tảng trên cùng một engine
 
 ### 📋 Đầy đủ
@@ -74,6 +74,59 @@
 > 💡 **Khi nào dùng bộ gõ khác?** Nếu bạn cần chuyển đổi bảng mã cũ (VNI, TCVN3...), hãy dùng UniKey/EVKey/OpenKey.
 
 Chi tiết: [Các lỗi thường gặp](docs/common-issues.md)
+
+---
+
+## 🔤 Auto-restore tiếng Anh
+
+Khi gõ tiếng Anh bằng Telex, một số chữ cái bị nhận nhầm thành modifier tiếng Việt:
+- `s` → sắc, `f` → huyền, `r` → hỏi, `x` → ngã, `j` → nặng
+- `w` → dấu móc (ư, ơ)
+
+**Gõ Nhanh tự động khôi phục** khi nhấn **Space** nếu phát hiện pattern tiếng Anh.
+
+### ✅ Các pattern được nhận diện
+
+| Pattern | Ví dụ | Giải thích |
+|:--------|:------|:-----------|
+| **Modifier + phụ âm** | `text` `next` `test` `expect` `express` | x/s theo sau bởi phụ âm (t, p, c...) |
+| **EI + modifier** | `their` `weird` | Cặp nguyên âm "ei" + r/s/f... |
+| **P + AI + modifier** | `pair` | P đầu (hiếm trong tiếng Việt) + ai |
+| **Nguyên âm + modifier + nguyên âm** | `use` `user` | Không có phụ âm đầu |
+| **W đầu + phụ âm** | `window` `water` `write` `what` | W không phải phụ âm đầu tiếng Việt |
+| **W + nguyên + W** | `wow` | Pattern "wow" đặc trưng tiếng Anh |
+| **F đầu** | `file` `fix` `function` `firebase` | F không tồn tại trong tiếng Việt |
+
+### 📝 Ví dụ thực tế
+
+```
+Gõ: "text "     → Kết quả: "text "     ✅ (x+t = pattern Anh)
+Gõ: "expect "   → Kết quả: "expect "   ✅ (x+p = pattern Anh)
+Gõ: "window "   → Kết quả: "window "   ✅ (W đầu + phụ âm)
+Gõ: "firebase " → Kết quả: "firebase " ✅ (F đầu)
+Gõ: "their "    → Kết quả: "their "    ✅ (ei + r)
+Gõ: "pair "     → Kết quả: "pair "     ✅ (P + ai + r)
+Gõ: "wow "      → Kết quả: "wow "      ✅ (W + o + W)
+
+Gõ: "mái "      → Kết quả: "mái "      ✅ (giữ tiếng Việt)
+Gõ: "cái "      → Kết quả: "cái "      ✅ (giữ tiếng Việt)
+Gõ: "được "     → Kết quả: "được "     ✅ (giữ tiếng Việt)
+```
+
+### ⚠️ Giới hạn
+
+Một số từ tiếng Anh tạo ra cấu trúc **hợp lệ tiếng Việt** nên không thể tự nhận diện:
+
+| Từ Anh | Kết quả Telex | Lý do |
+|:-------|:--------------|:------|
+| `mix` | `mĩ` | M + ĩ hợp lệ |
+| `box` | `bõ` | B + õ hợp lệ |
+| `six` | `sĩ` | S + ĩ hợp lệ |
+
+**Giải pháp:**
+- Dùng **raw mode**: gõ `\mix` → `mix`
+- Nhấn **ESC** sau khi gõ để khôi phục
+- Tắt bộ gõ tạm thời (⌘+Space hoặc click menu bar)
 
 ## ❤️‍🔥 Động lực
 
@@ -118,7 +171,7 @@ make install   # Copy vào /Applications
 | **Anti-over-engineering** | Không abstraction layer thừa. Inline code khi chỉ dùng 1 chỗ |
 | **Performance-first** | Target: <1ms latency, <10MB RAM. Không allocation trong hot path |
 | **Zero dependency** | Rust core chỉ dùng `std`. Không crates ngoài |
-| **Test-driven** | 450+ tests với test coverage 100%. Coverage cho edge cases tiếng Việt |
+| **Test-driven** | 470+ tests với coverage 100%. Bao gồm edge cases tiếng Việt và auto-restore tiếng Anh |
 | **Validation-first** | Reject invalid input sớm. Validate trước khi transform |
 | **Platform-agnostic core** | Core = pure Rust, no OS-specific code. UI layer riêng cho mỗi platform |
 
