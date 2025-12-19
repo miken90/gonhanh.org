@@ -1160,7 +1160,7 @@ const TELEX_NON_ADJACENT_STROKE: &[(&str, &str)] = &[
     ("dada", "dada"),
     ("dodo", "dodo"),
     // Mixed: adjacent dd at start
-    ("ddead", "đead"),     // dd at start is adjacent → đ, then "ead"
+    ("ddead", "đead"),           // dd at start is adjacent → đ, then "ead"
     ("ddedicated", "đedicated"), // dd at start
     // Note: "deadd" → "deadd" because "dead" is invalid (d not a valid final),
     // so even though 5th d is adjacent to 4th d, validation fails

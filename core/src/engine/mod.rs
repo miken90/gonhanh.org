@@ -538,9 +538,7 @@ impl Engine {
     /// delayed stroke is allowed (e.g., "duong9" → "đuong").
     fn try_stroke(&mut self, key: u16) -> Option<Result> {
         // Find position of un-stroked 'd' to apply stroke
-        let pos;
-
-        if self.method == 0 {
+        let pos = if self.method == 0 {
             // Telex: Issue #51 - require adjacent 'd' for stroke
             // Check if the LAST character in buffer is an un-stroked 'd'
             let last_pos = self.buf.len().checked_sub(1)?;
@@ -549,17 +547,16 @@ impl Engine {
             if last_char.key != keys::D || last_char.stroke {
                 return None;
             }
-            pos = last_pos;
+            last_pos
         } else {
             // VNI: Allow delayed stroke - find first un-stroked 'd' anywhere in buffer
             // '9' is always intentional stroke command, not a letter
-            pos = self
-                .buf
+            self.buf
                 .iter()
                 .enumerate()
                 .find(|(_, c)| c.key == keys::D && !c.stroke)
-                .map(|(i, _)| i)?;
-        }
+                .map(|(i, _)| i)?
+        };
 
         // Check revert: if last transform was stroke on same key at same position
         if let Some(Transform::Stroke(last_key)) = self.last_transform {
