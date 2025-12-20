@@ -1157,11 +1157,11 @@ const TELEX_NON_ADJACENT_STROKE: &[(&str, &str)] = &[
     ("deadline", "deadline"),
     ("dedicated", "dedicated"),
     ("decided", "decided"),
-    // Open syllables (d + vowel + d) - stroke is DEFERRED to mark key
-    // This prevents false transformation of English-like patterns
-    ("dede", "dede"), // No mark key, stroke deferred
-    ("dada", "dada"), // No mark key, stroke deferred
-    ("dodo", "dodo"), // No mark key, stroke deferred
+    // Open syllables with tone keys (a, e, o, w) - tone applies, enabling fast typing
+    // This allows "dodo" → "đô" when user types d-o-d-o quickly
+    ("dede", "đê"), // Short stroke + circumflex
+    ("dada", "đâ"), // Short stroke + circumflex
+    ("dodo", "đô"), // Short stroke + circumflex
     // Mixed: adjacent dd at start
     ("ddead", "đead"),           // dd at start is adjacent → đ, then "ead"
     ("ddedicated", "đedicated"), // dd at start

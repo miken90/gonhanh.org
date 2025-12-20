@@ -455,7 +455,7 @@ impl Engine {
         }
 
         // Revert short-pattern stroke when new letter creates invalid Vietnamese
-        // This handles: "ded" → "đe" (stroke applied), then 'e' → "dede" (invalid, revert)
+        // This handles: "ded" → "đe" (stroke applied), then 'i' → "dedi" (invalid, revert)
         // IMPORTANT: This check must happen BEFORE any modifiers (tone, mark, etc.)
         // because the modifier key (like 'e' for circumflex) would transform the
         // buffer before we can check validity.
@@ -465,11 +465,16 @@ impl Engine {
         // - raw_input = [d, e, d, e] with new 'e' (4 chars - the actual full input)
         // Checking [D, E, D, E] correctly identifies "dede" as invalid.
         //
-        // Skip revert for mark keys (s, f, r, x, j) since they confirm Vietnamese intent.
+        // Skip revert for:
+        // - Mark keys (s, f, r, x, j) - confirm Vietnamese intent
+        // - Tone keys (a, e, o, w) that can apply to buffer - allows fast typing
+        //   e.g., "dod" → "đo" + 'o' → "đô" (user typed d-o-d-o fast, intended "ddoo")
         let is_mark_key = m.mark(key).is_some();
+        let is_tone_key = m.tone(key).is_some();
 
         if keys::is_letter(key)
             && !is_mark_key
+            && !is_tone_key
             && matches!(self.last_transform, Some(Transform::ShortPatternStroke))
         {
             // Build buffer_keys from raw_input (which already includes current key)
