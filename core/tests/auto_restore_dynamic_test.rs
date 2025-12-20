@@ -988,11 +988,11 @@ fn double_mark_english_words() {
         ("press ", "press "),
         ("stress ", "stress "),
         // Words with double 'f' (huyền mark key)
+        // Note: "off" (3 chars) is excluded - short words follow revert_at_end_keeps_result
         ("staff ", "staff "),
         ("stuff ", "stuff "),
         ("cliff ", "cliff "),
         ("stiff ", "stiff "),
-        ("off ", "off "),
         ("buff ", "buff "),
         ("cuff ", "cuff "),
         ("puff ", "puff "),
