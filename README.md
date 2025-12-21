@@ -113,7 +113,7 @@ Khi gõ tiếng Anh bằng Telex, một số chữ cái bị nhận nhầm thàn
 | `with ` | `ưith ` ❌ | `with ` ✅ |
 | `tesla ` | `téla ` ❌ | `tesla ` ✅ |
 | `luxury ` | `lủuy ` ❌ | `luxury ` ✅ |
-| `their ` | `thỉ ` ❌ | `their ` ✅ |
+| `case ` | `cáe ` ❌ | `case ` ✅ |
 | `wow ` | `ươ ` ❌ | `wow ` ✅ |
 | `file ` | `file ` ✅ | `file ` ✅ |
 | `fix ` | `fix ` ✅ | `fix ` ✅ |
