@@ -109,6 +109,9 @@ fn pattern2_aa_vowel_pair() {
         ("ngueeuf ", "nguều "), // ng+u+ê+u with huyền → valid Vietnamese (ee for ê)
         ("ngoafo ", "ngoào "),  // ng+o+à+o - ôa is invalid, so 'o' appends raw
         ("ngoejo ", "ngoẹo "),  // ng+o+ẹ+o - oeo triphthong with nặng → valid Vietnamese
+        // Triphthong without initial - should preserve, not apply circumflex
+        ("oeo ", "oeo "),       // o+e+o → oeo triphthong, NOT ôe
+        ("oejo ", "oẹo "),      // o+e+j+o → oẹo (oeo with nặng)
     ]);
 }
 

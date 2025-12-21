@@ -976,6 +976,24 @@ impl Engine {
                         // Skip circumflex, let the vowel append as raw letter
                         return None;
                     }
+
+                    // Check if adding this vowel would create a valid triphthong
+                    // If so, skip circumflex and let the vowel append raw
+                    // Example: "oe" + "o" → [O, E, O] = "oeo" triphthong → skip circumflex
+                    let vowels: Vec<u16> = self
+                        .buf
+                        .iter()
+                        .filter(|c| keys::is_vowel(c.key))
+                        .map(|c| c.key)
+                        .collect();
+
+                    if vowels.len() == 2 {
+                        let potential_triphthong = [vowels[0], vowels[1], key];
+                        if constants::VALID_TRIPHTHONGS.contains(&potential_triphthong) {
+                            // This would create a valid triphthong, skip circumflex
+                            return None;
+                        }
+                    }
                 }
 
                 for (i, c) in self.buf.iter().enumerate().rev() {
