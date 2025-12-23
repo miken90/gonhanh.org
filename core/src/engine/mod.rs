@@ -660,8 +660,17 @@ impl Engine {
             && matches!(self.last_transform, Some(Transform::ShortPatternStroke))
         {
             // Build buffer_keys from raw_input (which already includes current key)
-            let buffer_keys: Vec<u16> = self.raw_input.iter().map(|&(k, _, _)| k).collect();
-            if !is_valid(&buffer_keys) {
+            let raw_keys: Vec<u16> = self.raw_input.iter().map(|&(k, _, _)| k).collect();
+
+            // Also check if the buffer (with stroke) + new key would be valid Vietnamese
+            // This handles delayed stroke patterns like "dadu" → "đau":
+            // - raw_input = [d, a, d, u] (invalid as "dadu")
+            // - But buffer + key = [đ, a] + [u] = "đau" (valid)
+            // If buffer + key is valid, don't revert the stroke
+            let mut buf_keys: Vec<u16> = self.buf.iter().map(|c| c.key).collect();
+            buf_keys.push(key);
+
+            if !is_valid(&raw_keys) && !is_valid(&buf_keys) {
                 // Invalid pattern - revert stroke and rebuild from raw_input
                 if let Some(raw_chars) = self.build_raw_chars() {
                     // Calculate backspace: screen shows buffer content (e.g., "đe")
@@ -809,6 +818,17 @@ impl Engine {
             let original_caps = self.buf.last().map(|c| c.caps).unwrap_or(caps);
             self.buf.pop();
             self.buf.push(Char::new(keys::W, original_caps));
+            // Fix raw_input: "ww" typed → raw has [w,w] but buffer is "w"
+            // Remove the shortcut-triggering 'w' from raw_input so restore works correctly
+            // raw_input: [a, w, w] → [a, w] (remove first 'w' that triggered shortcut)
+            // This ensures "awwait" → "await" not "awwait" on auto-restore
+            if self.raw_input.len() >= 2 {
+                let current = self.raw_input.pop(); // current 'w' (just added)
+                self.raw_input.pop(); // shortcut-trigger 'w' (consumed, discard)
+                if let Some(c) = current {
+                    self.raw_input.push(c);
+                }
+            }
             let w = if original_caps { 'W' } else { 'w' };
             return Some(Result::send(1, &[w]));
         }
@@ -2116,6 +2136,17 @@ impl Engine {
             if let Some(c) = self.buf.get_mut(pos) {
                 if c.tone > tone::NONE {
                     c.tone = tone::NONE;
+                    // Fix raw_input: "ww" typed → raw has [w,w] but buffer is "w"
+                    // Remove the tone-triggering key from raw_input so restore works correctly
+                    // raw_input: [a, w, w] → [a, w] (remove first 'w' that triggered tone)
+                    // This ensures "awwait" → "await" not "awwait" on auto-restore
+                    if self.raw_input.len() >= 2 {
+                        let current = self.raw_input.pop(); // current key (just added)
+                        self.raw_input.pop(); // tone-trigger key (consumed, discard)
+                        if let Some(c) = current {
+                            self.raw_input.push(c);
+                        }
+                    }
                     return self.revert_and_rebuild(pos, key, caps);
                 }
             }
@@ -2648,6 +2679,8 @@ impl Engine {
         // If no Vietnamese transforms were ever applied this word, nothing to restore
         // This prevents false restore for words with numbers/symbols like "nhatkha1407@gmail.com"
         // where the buffer is invalid Vietnamese but no transforms were ever attempted
+        // Also handles words with invalid initials like "forr" - since 'f' is not valid,
+        // no mark was ever applied, so the result stays "forr" (not collapsed to "for")
         if !self.had_any_transform {
             return None;
         }
@@ -2699,6 +2732,25 @@ impl Engine {
             let has_marks = self.buf.iter().any(|c| c.mark > 0);
             if !has_marks {
                 return self.build_raw_chars();
+            }
+        }
+
+        // Check 4: Significant character consumption with invalid raw_input
+        // If raw_input is 2+ chars longer than buffer AND raw_input is not valid Vietnamese,
+        // this suggests transforms consumed chars that shouldn't have been consumed.
+        // Example: "await" (5 chars) → "âit" (3 chars) - diff of 2
+        // - "aw" triggers breve on 'a'
+        // - "a" triggers circumflex (double-vowel), consuming 'w' and second 'a'
+        // - Result: buffer is valid but user typed English word
+        if self.raw_input.len() >= self.buf.len() + 2 {
+            let raw_keys: Vec<u16> = self.raw_input.iter().map(|&(k, _, _)| k).collect();
+            if !is_valid(&raw_keys) {
+                // Check if buffer has circumflex without mark (like "await" → "âit")
+                let has_circumflex = self.buf.iter().any(|c| c.tone == tone::CIRCUMFLEX);
+                let has_marks = self.buf.iter().any(|c| c.mark > 0);
+                if has_circumflex && !has_marks {
+                    return self.build_raw_chars();
+                }
             }
         }
 
@@ -2762,12 +2814,20 @@ impl Engine {
             return false;
         }
 
-        // Very short words (3 chars or less) → likely intentional revert
+        // Very short words (3 chars or less raw input) → likely intentional revert
         if self.raw_input.len() <= 3 {
             return true;
         }
 
-        // For longer words (4+ chars), check modifier type:
+        // For 4-char raw input producing 3-char result (e.g., "SOSS" → "SOS", "varr" → "var"),
+        // keep the reverted result. The user explicitly typed double modifier to revert.
+        // This only applies when a transform WAS applied (valid Vietnamese initial).
+        // Words with invalid initials (f, j, w, z) never get transforms, so they stay as-is.
+        if self.raw_input.len() == 4 && self.buf.len() == 3 {
+            return true;
+        }
+
+        // For longer words (5+ chars), check modifier type:
         // - 'x', 'j' (Telex) or VNI numbers: not common doubles in English → keep
         // - 's', 'f', 'r' (Telex): very common doubles in English (bass, staff, error) → restore
         if self.method == 0 {
