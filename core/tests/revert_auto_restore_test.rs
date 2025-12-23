@@ -111,6 +111,9 @@ fn revert_at_end_restores_long_english_words() {
         // Double w: programming keywords
         ("await ", "await "),  // normal typing, no double w
         ("awwait ", "await "), // double w reverts horn, restore to English
+        // Double s in middle: usser → user (ss reverts sắc, buffer has "user")
+        ("usser ", "user "), // u-s-s-e-r → buffer "user", restore to buffer
+        // Note: "user" without double s also works (tested in english_auto_restore_test.rs)
     ]);
 }
 
@@ -120,6 +123,48 @@ fn double_vowel_with_mark() {
         // "maas" → "ma" + 'a' (circumflex) + 's' (sắc) = "mấ"
         // In Telex, double 'a' = circumflex, then 's' = sắc mark on top
         ("maas ", "mấ "),
+    ]);
+}
+
+// =============================================================================
+// DOUBLE D (Đ) + AUTO-RESTORE
+// Tests for dd → đ conversion and validation of resulting syllables
+// =============================================================================
+
+#[test]
+fn double_s_middle_pattern() {
+    // Pattern: V-ss-V-C → buffer uses reverted result
+    // "usser" typed as u-s-s-e-r:
+    // - 's' applies sắc → "ú"
+    // - second 's' reverts → "us"
+    // - 'e' + 'r' → "user"
+    // Buffer is "user", raw_input is [u,s,s,e,r] (5 chars)
+    // Since double 's' in middle + consonant end → use buffer
+    telex_auto_restore(&[
+        ("usser ", "user "),
+        // Note: "issue" has different pattern (i-ss-u-e ends with vowel)
+        // so it uses raw_input → "issue"
+        ("issue ", "issue "),
+    ]);
+}
+
+#[test]
+fn complex_words_with_multiple_transforms() {
+    // Words where multiple Vietnamese transforms happen but should stay Vietnamese
+    // These are edge cases that test the auto-restore heuristics
+    telex_auto_restore(&[
+        // cursor: c-u-r-s-o-r → "cuỏ" (multiple transforms)
+        // - 'r' after 'u' adds hỏi → củ
+        // - 's' changes hỏi to sắc → cú
+        // - 'o' opens new syllable → cuó
+        // - final 'r' adds hỏi to 'o' → cuỏ
+        // This stays as Vietnamese because buffer "cuỏ" is structurally valid
+        ("cursor ", "cuỏ "),
+        // cusor: c-u-s-o-r → "cuỏ"
+        // - 's' adds sắc to 'u' → cú
+        // - 'o' opens new syllable → cuó
+        // - 'r' adds hỏi to 'o' → cuỏ
+        ("cusor ", "cuỏ "),
     ]);
 }
 

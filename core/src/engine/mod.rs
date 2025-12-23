@@ -3052,6 +3052,26 @@ impl Engine {
             }
         }
 
+        // Check for double 's' in middle with exactly 2 chars after
+        // Pattern: "usser" → buffer "user" (double 's' in middle, ends with consonant 'r')
+        // This handles cases where user types "usser" to get "user"
+        // Only apply for double 's' (sắc mark) - most common revert pattern
+        // - "usser": u-ss-e-r → use buffer "user"
+        // - "offer": o-ff-e-r → keep raw "offer" (real word with double 'f')
+        if self.raw_input.len() == 5 && buf_str.len() == 4 {
+            let (last_key, _, _) = self.raw_input[4];
+            let (key_1, _, _) = self.raw_input[1];
+            let (key_2, _, _) = self.raw_input[2];
+
+            // Only apply for double 's' (not 'f', 'r', etc. which have common English doubles)
+            if key_1 == keys::S && key_2 == keys::S {
+                // Raw must end with consonant that's NOT 's'
+                if keys::is_consonant(last_key) && last_key != keys::S {
+                    return true;
+                }
+            }
+        }
+
         // Check for short words with double modifier at end that reverted
         // Pattern: "thiss" → buffer "this"
         // Raw input ends with double modifier (ss, rr, ff, xx, jj)
