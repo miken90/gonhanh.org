@@ -49,13 +49,22 @@
 ### Testing
 - **Coverage**: Every module must have `#[cfg(test)] mod tests { }` and integration tests in `core/tests/`
 - **Parametrization**: Use `#[rstest]` for multiple test cases
-- **Integration**: `core/tests/` directory for full pipeline tests (160+ tests, 2100+ lines)
+- **Integration**: `core/tests/` directory for full pipeline tests (600+ tests across 19 test files)
 - **Test Files**:
   - `unit_test.rs` - Individual module tests
   - `typing_test.rs` - Full keystroke sequences (Telex + VNI)
   - `engine_test.rs` - Engine state + initialization
   - `integration_test.rs` - End-to-end keystroke→output
   - `paragraph_test.rs` - Multi-word paragraph typing
+  - `auto_capitalize_test.rs` - Auto-capitalization edge cases
+  - `auto_restore_dynamic_test.rs` - Dynamic auto-restore patterns
+  - `english_auto_restore_test.rs` - English word detection
+  - `english_auto_restore_toggle_test.rs` - Toggle behavior
+  - `english_words_test.rs` - English vocabulary patterns
+  - `bug_reports_test.rs` - Regression tests for reported bugs
+  - `dynamic_test.rs` - Dynamic input scenarios
+  - `permutation_test.rs` - Input permutation coverage
+  - `revert_auto_restore_test.rs` - Revert behavior
 - **Naming**: `test_feature_case_expected` (e.g., `test_telex_a_s_returns_á`)
 - **Run**: `make test` or `cd core && cargo test`
 
@@ -300,12 +309,12 @@ pub extern "C" fn ime_key(key: u16, caps: bool, ctrl: bool) -> *mut Result { }
 
 ## Version Numbering
 
-- **Semantic Versioning**: MAJOR.MINOR.PATCH (e.g., 1.2.3)
+- **Semantic Versioning**: MAJOR.MINOR.PATCH (e.g., 1.0.89)
 - **MAJOR**: Breaking changes (rare)
 - **MINOR**: New features, backward compatible
 - **PATCH**: Bug fixes only
-- **Release**: Tag with `v` prefix (e.g., `v1.2.3`)
-- **Current Version**: v1.0.21+ (macOS + Windows production-ready)
+- **Release**: Tag with `v` prefix (e.g., `v1.0.89`)
+- **Current Version**: v1.0.89 (macOS + Windows production-ready, Linux beta)
 
 ## Pull Request Guidelines
 
@@ -318,6 +327,7 @@ pub extern "C" fn ime_key(key: u16, caps: bool, ctrl: bool) -> *mut Result { }
 
 ---
 
-**Last Updated**: 2025-12-14
+**Last Updated**: 2025-12-25
 **Enforced By**: GitHub Actions CI (`ci.yml`)
-**Test Coverage**: 160+ integration tests across 5 test files in `core/tests/`
+**Test Coverage**: 600+ integration tests across 19 test files in `core/tests/`
+**Platforms**: macOS (v1.0.89+), Windows (production), Linux (beta)

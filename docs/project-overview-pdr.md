@@ -2,7 +2,14 @@
 
 ## Project Vision
 
-Gõ Nhanh is a **high-performance Vietnamese input method engine** (IME) for macOS and Windows with a platform-agnostic Rust core. It enables fast, accurate Vietnamese text input with minimal system overhead. The project demonstrates production-grade system software design: Rust core for performance and safety, native UI (SwiftUI on macOS, WPF on Windows), and validation-first transformation pipeline for Vietnamese phonology.
+Gõ Nhanh is a **high-performance Vietnamese input method engine** (IME) with multi-platform support (macOS, Windows, Linux) built on a zero-dependency Rust core. It enables fast, accurate Vietnamese text input with minimal system overhead while addressing critical bugs in existing IMEs (Chrome/Spotlight address bar issues, autocomplete conflicts).
+
+The project demonstrates production-grade system software design:
+- **Zero-dependency Rust core** (~3,500 LOC) - platform-agnostic, FFI-ready
+- **Native UI per platform** - SwiftUI (macOS), WPF/.NET 8 (Windows), Fcitx5 (Linux)
+- **Validation-first pipeline** - Vietnamese phonology rules checked BEFORE transformation
+- **Smart auto-restore** - Detects English patterns (text, expect, user) and auto-reverts on space
+- **Per-app mode memory** - Remembers IME on/off state per application
 
 ## Product Goals
 
@@ -14,16 +21,23 @@ Gõ Nhanh is a **high-performance Vietnamese input method engine** (IME) for mac
 
 ## Target Users
 
-- **Primary**: Vietnamese professionals and students on macOS who type Vietnamese daily
-- **Secondary**: Vietnamese diaspora, bilingual professionals
-- **Requirement**: macOS 10.15+ with Accessibility permissions enabled
+- **Primary**: Vietnamese developers, technical writers, students typing Vietnamese daily on macOS/Windows/Linux
+- **Secondary**: Vietnamese diaspora, bilingual professionals working with code and Vietnamese text
+- **Pain Points Solved**:
+  - Chrome/Arc/Spotlight address bar diacritics issues (fixed with Selection method)
+  - Autocomplete conflicts in IDEs (JetBrains, Excel)
+  - Need to toggle IME when typing English code/commands
+  - Per-app IME state (e.g., OFF in VS Code, ON in Slack)
+- **Requirements**: macOS 10.15+ / Windows 10+ / Linux with Fcitx5, Accessibility permissions
 
 ## Core Functional Requirements
 
 ### Input Methods
-- **Telex**: Vietnamese keyboard layout (VIQR-style: a's → á)
-- **VNI**: Alternative numeric layout support
-- **Shortcuts**: User-defined abbreviations with priority matching
+- **Telex**: Vietnamese VIQR-style (s/f/r/x/j for tones, w for horn, dd→đ)
+- **VNI**: Alternative numeric layout (1-5 for tones, 6-8 for marks, 9 for đ)
+- **Shortcuts**: User-defined abbreviations (vn→Việt Nam, ko→không)
+- **Auto-restore English**: Smart detection of English patterns (text, expect, user, window) with auto-revert on space
+- **ESC to revert**: Press ESC to restore original text without disabling IME
 
 ### Keystroke Processing
 1. Buffer management: Maintain context for multi-keystroke transforms
@@ -32,10 +46,13 @@ Gõ Nhanh is a **high-performance Vietnamese input method engine** (IME) for mac
 4. Output: Send backspace + replacement characters or pass through
 
 ### Platform Integration
-- CGEventTap keyboard hook intercepts keyDown events system-wide
-- Smart text replacement: Backspace method (Terminal) + Selection method (Chrome/Excel)
-- Ctrl+Space global hotkey for Vietnamese/English toggle
-- Application detection: Specialized handling for autocomplete apps
+- **macOS**: CGEventTap keyboard hook with dual text replacement (Backspace method for body text, Selection method for address bars/autocomplete)
+- **Windows**: SetWindowsHookEx (WH_KEYBOARD_LL) + SendInput for text injection
+- **Linux**: Fcitx5 addon integration with X11/Wayland support
+- **Smart context detection**: Accessibility API detects focused element (AXComboBox, AXSearchField) to choose replacement method
+- **Global hotkey**: Ctrl+Space for Vietnamese/English toggle (configurable)
+- **Per-app IME state**: Remembers enabled/disabled state per application bundle ID
+- **Auto-follow input source**: Auto-disables when switching to Japanese/Korean/Chinese input
 
 ## Non-Functional Requirements
 
@@ -46,21 +63,25 @@ Gõ Nhanh is a **high-performance Vietnamese input method engine** (IME) for mac
 - No input delay under sustained high-speed typing
 
 ### Reliability
-- 160+ integration tests covering edge cases
+- 600+ integration tests covering edge cases (Telex, VNI, auto-restore, shortcuts)
 - Validation-first pattern: Reject invalid Vietnamese before transforming
 - Graceful fallback: Pass through on disable or invalid input
 - Thread-safe global engine instance via Mutex
+- No panics in FFI boundary (all errors handled)
 
 ### Compatibility
-- macOS 10.15 Catalina and later
-- Apple Silicon (arm64) and Intel (x86_64) universal binaries
-- Works with all major applications: Terminal, VS Code, Chrome, Safari, Office
+- **macOS**: 10.15 Catalina and later, Apple Silicon (arm64) + Intel (x86_64) universal binaries
+- **Windows**: Windows 10/11, .NET 8 runtime
+- **Linux**: Fcitx5 framework, X11/Wayland
+- Works with all major applications: Terminal, VS Code, Chrome, Safari, Office, JetBrains IDEs
+- Smart handling of autocomplete contexts (address bars, search fields, IDE completions)
 
 ### Security
-- No internet access required (offline-first)
-- GPL-3.0-or-later license (free and open source)
-- Accessibility permission: Required for keyboard hook (transparent to user)
-- No telemetry or analytics
+- No internet access required (offline-first, zero telemetry)
+- BSD-3-Clause license (free and open source)
+- Accessibility permission: Required for keyboard hook (transparent user prompt)
+- No data collection, no analytics, no cloud sync
+- All processing happens locally on device
 
 ## Architecture Overview
 
@@ -98,28 +119,44 @@ User Keystroke (CGEventTap/SetWindowsHookEx)
 |--------|--------|---------|--------|
 | Keystroke latency | <1ms | ~0.2-0.5ms | ✓ Exceeds |
 | Memory usage | <10MB | ~5MB | ✓ Exceeds |
-| Test coverage | >90% | 160+ tests, 2100+ lines | ✓ Exceeds |
-| macOS compatibility | 10.15+ | 10.15+ universal binary | ✓ Met |
+| Test coverage | >90% | 600+ tests, 19 test files | ✓ Exceeds |
+| Platform coverage | 3 platforms | macOS (prod), Windows (prod), Linux (beta) | ✓ Met |
 | Code quality | Zero warnings | `cargo clippy -D warnings` | ✓ Met |
-| Cross-platform | macOS + Windows | Both production-ready | ✓ Met |
+| Cross-platform core | Single codebase | Rust core ~3,500 LOC, FFI-ready | ✓ Met |
 
 ## Roadmap
 
-### Phase 1: macOS (Complete - v1.0.21+)
+### Phase 1: macOS (Complete - v1.0.89+)
 - Telex + VNI input methods
 - Menu bar app with settings
-- Auto-launch on login
+- Auto-launch on login (SMAppService)
 - Update checker via GitHub releases
 - Validation-first architecture
 - Shortcut system with priority matching
+- Auto-restore English patterns
+- Per-app IME state memory
+- Smart text replacement (Backspace + Selection methods)
+- ESC to revert transformation
 
 ### Phase 2: Cross-Platform (Windows Complete, Linux In Progress)
 
-**Windows 10/11 (Complete - Production Ready)**
+**Windows 10/11 (Complete - Production Ready, Feature Parity Achieved)**
 - SetWindowsHookEx keyboard hook
 - WPF/.NET 8 UI with system tray
 - Registry-based settings persistence
-- Feature parity with macOS version
+- **NEW: 5 Advanced Settings**:
+  - Skip W Shortcut (w→ư control in Telex)
+  - ESC Restore (ESC reverts to raw ASCII)
+  - Free Tone (skip validation, place diacritics anywhere)
+  - English Auto-Restore (auto-detect English words)
+  - Auto-Capitalize (capitalize after . ! ? Enter)
+- **NEW: Shortcuts Manager**:
+  - User-defined abbreviations with Registry persistence
+  - Default Vietnamese abbreviations (vn, hn, hcm, ko, dc, vs, ms)
+  - Auto-sync with Rust engine via 11 new FFI methods
+- **NEW: Advanced Settings UI**:
+  - AdvancedSettingsWindow.xaml for configuration
+  - Full feature compatibility with macOS version
 - Compiled DLL shared with macOS core
 
 **Linux (Beta)**
@@ -129,11 +166,12 @@ User Keystroke (CGEventTap/SetWindowsHookEx)
 - Feature parity with macOS/Windows
 
 ### Phase 3: Enhanced Features (Future)
-- Cloud sync for user preferences
-- Machine learning for shortcut suggestions
+- Advanced auto-restore heuristics (ML-based pattern detection)
+- User-editable shortcuts via UI
 - Dictionary lookup integration
-- Advanced diacritics editor
-- Mobile support (iOS/Android)
+- Custom diacritics placement rules
+- Cloud sync for preferences (optional, privacy-first)
+- Mobile support (iOS/Android with platform-specific UI)
 
 ## Development Standards
 
@@ -144,10 +182,11 @@ User Keystroke (CGEventTap/SetWindowsHookEx)
 - **Tests** (`core/tests/`): Integration tests + unit tests
 
 ### Quality Gates
-- Format: `cargo fmt` (automatic formatting)
+- Format: `cargo fmt` (automatic formatting, enforced by CI)
 - Lint: `cargo clippy -- -D warnings` (no warnings allowed)
-- Tests: `cargo test` (160+ tests must pass)
-- Build: Universal binary creation (arm64 + x86_64)
+- Tests: `cargo test` (600+ tests must pass across 19 test files)
+- Build: Universal binary creation (arm64 + x86_64 for macOS)
+- CI/CD: GitHub Actions runs format, clippy, test, build on every push/PR
 
 ### Commit Message Format
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
@@ -169,18 +208,29 @@ Examples:
 ## Dependencies
 
 ### Rust
-- Zero production dependencies (pure stdlib)
-- Dev: `rstest` for parametrized tests
+- Zero production dependencies (pure stdlib for core engine)
+- Dev: `rstest` for parametrized tests, `serial_test` for sequential test execution
 
 ### Swift/macOS
 - Foundation: URLSession, UserDefaults, FileHandle
-- AppKit: NSApplication, NSStatusBar, CGEventTap
+- AppKit: NSApplication, NSStatusBar, CGEventTap, Accessibility API
 - SwiftUI: Standard UI components, macOS 11+ features
+
+### C#/Windows
+- .NET 8: WPF for UI, P/Invoke for FFI
+- Windows API: SetWindowsHookEx, SendInput, Registry
+
+### C++/Linux
+- Fcitx5: Input method framework
+- X11/Wayland: Display server protocols
 
 ### Build Tools
 - `cargo` (Rust toolchain)
 - `xcodebuild` (macOS app build)
+- `dotnet` (Windows app build)
+- `cmake` (Linux Fcitx5 addon)
 - GNU Make (build automation)
+- GitHub Actions (CI/CD)
 
 ## Maintenance & Support
 
@@ -192,25 +242,42 @@ Examples:
 ### Community
 - GitHub Issues: Bug reports and feature requests
 - GitHub Discussions: Questions and community support
-- Contributing: GPL-3.0 requires contributor agreement
+- Contributing: BSD-3-Clause, open to contributions
+- Sponsorship: GitHub Sponsors for financial support
 
 ## Success Criteria for Milestones
 
-**v1.0 Release**
+**v1.0 Release** (Achieved)
 - All core input methods working reliably
-- Sub-1ms latency confirmed
-- 160+ tests passing
-- macOS app in official release
+- Sub-1ms latency confirmed (~0.2-0.5ms)
+- 600+ tests passing across 19 test files
+- macOS app in official release (Homebrew available)
+- Production-ready on macOS and Windows
 
-**v1.1+ Releases**
-- Cross-platform support (Windows/Linux)
-- User-customizable shortcuts
-- Enhanced documentation
-- Community contribution guidelines
+**v1.1+ Releases** (Current)
+- Cross-platform support (macOS ✓, Windows ✓ feature parity, Linux in progress)
+- User-customizable shortcuts (implemented on both platforms)
+- **Windows Advanced Features** (NEW):
+  - 5 advanced settings (SkipWShortcut, EscRestore, FreeTone, EnglishAutoRestore, AutoCapitalize)
+  - Shortcuts Manager with Registry persistence
+  - AdvancedSettingsWindow UI
+  - 11 new RustBridge FFI methods
+- Enhanced documentation (ongoing)
+- Community contribution guidelines (CONTRIBUTING.md)
+- Auto-restore English patterns (implemented)
+- Per-app IME state memory (implemented)
 
 ---
 
-**Last Updated**: 2025-12-14
+**Last Updated**: 2025-12-25
 **Status**: Active Development
-**Platforms**: macOS (v1.0.21+), Windows (production), Linux (beta)
+**Current Version**: v1.0.89
+**Platforms**: macOS (production), Windows (production, feature parity achieved), Linux (beta)
 **Repository**: https://github.com/khaphanspace/gonhanh.org
+
+**Windows Platform Status**:
+- ✅ Feature parity with macOS achieved
+- ✅ 5 advanced settings implemented
+- ✅ Shortcuts Manager with Registry persistence
+- ✅ Advanced Settings UI
+- ✅ Production-ready build

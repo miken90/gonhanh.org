@@ -51,3 +51,6 @@ obj/
 .opencode/
 plans/
 CLAUDE.md
+
+repomix-output.xml
+platforms/windows/publish/

@@ -26,6 +26,7 @@ public class TrayIcon : IDisposable
     public event Action? OnExitRequested;
     public event Action<InputMethod>? OnMethodChanged;
     public event Action<bool>? OnEnabledChanged;
+    public event Action? OnAdvancedSettingsRequested;
 
     #endregion
 
@@ -68,6 +69,11 @@ public class TrayIcon : IDisposable
         _contextMenu.Items.Add(toggleItem);
 
         _contextMenu.Items.Add(new ToolStripSeparator());
+
+        // Advanced Settings
+        var advancedItem = new ToolStripMenuItem("Cài đặt nâng cao...");
+        advancedItem.Click += (s, e) => OnAdvancedSettingsRequested?.Invoke();
+        _contextMenu.Items.Add(advancedItem);
 
         // About (like macOS "Giới thiệu GoNhanh")
         var aboutItem = new ToolStripMenuItem($"Giới thiệu {AppMetadata.Name}");

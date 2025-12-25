@@ -15,6 +15,7 @@ public partial class App : System.Windows.Application
     private TrayIcon? _trayIcon;
     private KeyboardHook? _keyboardHook;
     private readonly SettingsService _settings = new();
+    private readonly ShortcutsManager _shortcuts = new();
     private System.Threading.Mutex? _mutex;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -33,6 +34,14 @@ public partial class App : System.Windows.Application
 
         // Load settings
         _settings.Load();
+        _shortcuts.Load();
+
+        // If first run, add default shortcuts
+        if (_settings.IsFirstRun)
+        {
+            _shortcuts.LoadDefaults();
+        }
+
         ApplySettings();
 
         // Initialize keyboard hook
@@ -45,6 +54,7 @@ public partial class App : System.Windows.Application
         _trayIcon.OnExitRequested += ExitApplication;
         _trayIcon.OnMethodChanged += ChangeInputMethod;
         _trayIcon.OnEnabledChanged += ToggleEnabled;
+        _trayIcon.OnAdvancedSettingsRequested += ShowAdvancedSettings;
         _trayIcon.Initialize(_settings.CurrentMethod, _settings.IsEnabled);
 
         // Show onboarding if first run (like macOS)
@@ -69,11 +79,19 @@ public partial class App : System.Windows.Application
         return true;
     }
 
-    private void ApplySettings()
+    public void ApplySettings()
     {
+        // Existing settings
         RustBridge.SetMethod(_settings.CurrentMethod);
         RustBridge.SetEnabled(_settings.IsEnabled);
         RustBridge.SetModernTone(_settings.UseModernTone);
+
+        // New advanced settings
+        RustBridge.SetSkipWShortcut(_settings.SkipWShortcut);
+        RustBridge.SetEscRestore(_settings.EscRestore);
+        RustBridge.SetFreeTone(_settings.FreeTone);
+        RustBridge.SetEnglishAutoRestore(_settings.EnglishAutoRestore);
+        RustBridge.SetAutoCapitalize(_settings.AutoCapitalize);
     }
 
     private void OnKeyPressed(object? sender, KeyPressedEventArgs e)
@@ -119,6 +137,12 @@ public partial class App : System.Windows.Application
         _settings.IsEnabled = enabled;
         _settings.Save();
         RustBridge.SetEnabled(enabled);
+    }
+
+    private void ShowAdvancedSettings()
+    {
+        var advancedWindow = new AdvancedSettingsWindow(_settings, _shortcuts);
+        advancedWindow.ShowDialog();
     }
 
     private void ExitApplication()

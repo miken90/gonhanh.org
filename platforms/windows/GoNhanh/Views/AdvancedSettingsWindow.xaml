@@ -1,0 +1,174 @@
+<Window x:Class="GoNhanh.Views.AdvancedSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Cài đặt nâng cao"
+        Height="600" Width="600"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResize"
+        Background="{StaticResource BackgroundBrush}">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <TextBlock Text="Cài đặt nâng cao"
+                       FontSize="24"
+                       FontWeight="SemiBold"
+                       Foreground="{StaticResource TextBrush}"/>
+            <TextBlock Text="Tùy chỉnh các tính năng bổ sung và phím tắt"
+                       FontSize="14"
+                       Foreground="{StaticResource SecondaryTextBrush}"
+                       Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- Settings Content -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <!-- Advanced Features Section -->
+                <TextBlock Text="Tính năng nâng cao"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextBrush}"
+                           Margin="0,0,0,12"/>
+
+                <Border BorderBrush="#E5E7EB"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="16"
+                        Margin="0,0,0,16">
+                    <StackPanel>
+                        <!-- Skip W Shortcut -->
+                        <CheckBox x:Name="SkipWShortcutCheckBox"
+                                  Content="Bỏ qua phím tắt W (ưa → ươ thay vì uwa)"
+                                  Margin="0,0,0,12"/>
+
+                        <!-- ESC Restore -->
+                        <CheckBox x:Name="EscRestoreCheckBox"
+                                  Content="Nhấn ESC để khôi phục văn bản gốc"
+                                  Margin="0,0,0,12"/>
+
+                        <!-- Free Tone Placement -->
+                        <CheckBox x:Name="FreeToneCheckBox"
+                                  Content="Đặt dấu tự do (không theo quy tắc chính tả)"
+                                  Margin="0,0,0,12"/>
+
+                        <!-- English Auto-Restore -->
+                        <CheckBox x:Name="EnglishAutoRestoreCheckBox"
+                                  Content="Tự động khôi phục từ tiếng Anh"
+                                  Margin="0,0,0,12"/>
+
+                        <!-- Auto Capitalize -->
+                        <CheckBox x:Name="AutoCapitalizeCheckBox"
+                                  Content="Tự động viết hoa chữ cái đầu câu"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Shortcuts Section -->
+                <TextBlock Text="Phím tắt văn bản"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextBrush}"
+                           Margin="0,8,0,12"/>
+
+                <Border BorderBrush="#E5E7EB"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="16"
+                        Margin="0,0,0,16">
+                    <StackPanel>
+                        <!-- Shortcuts DataGrid -->
+                        <DataGrid x:Name="ShortcutsDataGrid"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  CanUserResizeRows="False"
+                                  HeadersVisibility="Column"
+                                  Height="200"
+                                  BorderThickness="1"
+                                  BorderBrush="#E5E7EB"
+                                  GridLinesVisibility="Horizontal"
+                                  HorizontalGridLinesBrush="#F3F4F6"
+                                  Margin="0,0,0,12">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Phím tắt"
+                                                    Binding="{Binding Trigger}"
+                                                    Width="*"
+                                                    IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Thay thế bằng"
+                                                    Binding="{Binding Replacement}"
+                                                    Width="*"
+                                                    IsReadOnly="True"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <!-- Add New Shortcut -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBox x:Name="TriggerTextBox"
+                                     Grid.Column="0"
+                                     Height="32"
+                                     VerticalContentAlignment="Center"
+                                     Padding="8,0"
+                                     BorderBrush="#E5E7EB"
+                                     BorderThickness="1"/>
+
+                            <TextBox x:Name="ReplacementTextBox"
+                                     Grid.Column="2"
+                                     Height="32"
+                                     VerticalContentAlignment="Center"
+                                     Padding="8,0"
+                                     BorderBrush="#E5E7EB"
+                                     BorderThickness="1"/>
+
+                            <Button x:Name="AddShortcutButton"
+                                    Grid.Column="4"
+                                    Content="Thêm"
+                                    Style="{StaticResource PrimaryButton}"
+                                    Height="32"
+                                    Width="80"
+                                    Click="AddShortcut_Click"/>
+
+                            <Button x:Name="RemoveShortcutButton"
+                                    Grid.Column="6"
+                                    Content="Xóa"
+                                    Height="32"
+                                    Width="80"
+                                    Click="RemoveShortcut_Click"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Action Buttons -->
+        <StackPanel Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,20,0,0">
+            <Button Content="Hủy"
+                    Width="100"
+                    Height="36"
+                    Margin="0,0,12,0"
+                    Click="Cancel_Click"/>
+            <Button Content="Lưu"
+                    Style="{StaticResource PrimaryButton}"
+                    Width="100"
+                    Height="36"
+                    Click="Save_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

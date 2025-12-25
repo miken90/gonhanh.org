@@ -20,6 +20,11 @@ public class SettingsService
     private const string KeyEnabled = "Enabled";
     private const string KeyFirstRun = "FirstRun";
     private const string KeyAutoStart = "AutoStart";
+    private const string KeySkipWShortcut = "SkipWShortcut";
+    private const string KeyEscRestore = "EscRestore";
+    private const string KeyFreeTone = "FreeTone";
+    private const string KeyEnglishAutoRestore = "EnglishAutoRestore";
+    private const string KeyAutoCapitalize = "AutoCapitalize";
 
     #endregion
 
@@ -30,6 +35,31 @@ public class SettingsService
     public bool IsEnabled { get; set; } = true;
     public bool IsFirstRun { get; set; } = true;
     public bool AutoStart { get; set; } = false;
+
+    /// <summary>
+    /// Skip w→ư shortcut in Telex mode
+    /// </summary>
+    public bool SkipWShortcut { get; set; }
+
+    /// <summary>
+    /// ESC key restores raw ASCII input
+    /// </summary>
+    public bool EscRestore { get; set; } = true;
+
+    /// <summary>
+    /// Enable free tone placement (skip validation)
+    /// </summary>
+    public bool FreeTone { get; set; }
+
+    /// <summary>
+    /// Auto-restore English words (text, expect, user, etc.)
+    /// </summary>
+    public bool EnglishAutoRestore { get; set; }
+
+    /// <summary>
+    /// Auto-capitalize after sentence-ending punctuation
+    /// </summary>
+    public bool AutoCapitalize { get; set; } = true;
 
     #endregion
 
@@ -55,6 +85,13 @@ public class SettingsService
             IsEnabled = ((int)(key.GetValue(KeyEnabled, 1) ?? 1)) == 1;
             IsFirstRun = ((int)(key.GetValue(KeyFirstRun, 1) ?? 1)) == 1;
             AutoStart = ((int)(key.GetValue(KeyAutoStart, 0) ?? 0)) == 1;
+
+            // Advanced settings
+            SkipWShortcut = ((int)(key.GetValue(KeySkipWShortcut, 0) ?? 0)) == 1;
+            EscRestore = ((int)(key.GetValue(KeyEscRestore, 1) ?? 1)) == 1;  // Default true
+            FreeTone = ((int)(key.GetValue(KeyFreeTone, 0) ?? 0)) == 1;
+            EnglishAutoRestore = ((int)(key.GetValue(KeyEnglishAutoRestore, 0) ?? 0)) == 1;
+            AutoCapitalize = ((int)(key.GetValue(KeyAutoCapitalize, 1) ?? 1)) == 1;  // Default true
         }
         catch (Exception ex)
         {
@@ -77,6 +114,13 @@ public class SettingsService
                 key.SetValue(KeyEnabled, IsEnabled ? 1 : 0, RegistryValueKind.DWord);
                 key.SetValue(KeyFirstRun, IsFirstRun ? 1 : 0, RegistryValueKind.DWord);
                 key.SetValue(KeyAutoStart, AutoStart ? 1 : 0, RegistryValueKind.DWord);
+
+                // Advanced settings
+                key.SetValue(KeySkipWShortcut, SkipWShortcut ? 1 : 0, RegistryValueKind.DWord);
+                key.SetValue(KeyEscRestore, EscRestore ? 1 : 0, RegistryValueKind.DWord);
+                key.SetValue(KeyFreeTone, FreeTone ? 1 : 0, RegistryValueKind.DWord);
+                key.SetValue(KeyEnglishAutoRestore, EnglishAutoRestore ? 1 : 0, RegistryValueKind.DWord);
+                key.SetValue(KeyAutoCapitalize, AutoCapitalize ? 1 : 0, RegistryValueKind.DWord);
             }
 
             // Update auto-start registry

@@ -464,6 +464,49 @@ Visible to user as transformed or original text
 
 ## Performance Characteristics
 
+### Windows Platform Advanced Features
+
+**5 Advanced Settings** (Windows feature parity with macOS achieved):
+
+1. **Skip W Shortcut** (`ime_skip_w_shortcut`)
+   - Controls w→ư shortcut in Telex mode
+   - When enabled: 'w' at word start stays as 'w' instead of 'ư'
+   - Default: false (w→ư shortcut active)
+
+2. **ESC Restore** (`ime_esc_restore`)
+   - ESC key restores raw ASCII input
+   - When enabled: pressing ESC reverts Vietnamese to original keystrokes
+   - Default: true
+
+3. **Free Tone** (`ime_free_tone`)
+   - Enable free tone placement without validation
+   - When enabled: allows placing diacritics anywhere, skips Vietnamese spelling rules
+   - Default: false (validation active)
+
+4. **English Auto-Restore** (`ime_english_auto_restore`)
+   - Auto-detect and restore English words (text, expect, user, window, etc.)
+   - When enabled: automatically reverts accidentally transformed English words
+   - Default: false
+
+5. **Auto-Capitalize** (`ime_auto_capitalize`)
+   - Auto-capitalize first letter after sentence-ending punctuation
+   - Triggers after: . ! ? Enter
+   - Default: true
+
+**Shortcuts Manager**:
+- User-defined abbreviations (vn→Việt Nam, ko→không)
+- Registry persistence at `HKCU\SOFTWARE\GoNhanh\Shortcuts`
+- Auto-sync with Rust engine via FFI
+- Default Vietnamese abbreviations: vn, hn, hcm, ko, dc, vs, ms
+
+**Registry Settings**:
+- Path: `HKCU\SOFTWARE\GoNhanh`
+- 5 advanced settings stored as DWord values
+- Shortcuts stored in subkey with trigger→replacement mapping
+- Auto-start integration via `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`
+
+## Performance Characteristics
+
 ### Latency Budget
 | Component | Time | Notes |
 |-----------|------|-------|
@@ -484,13 +527,21 @@ Visible to user as transformed or original text
 ### Scalability
 - **Multi-user**: App per user, each runs own engine instance
 - **Concurrent**: Mutex-protected ENGINE global (thread-safe)
-- **Continuous**: No memory leaks (tested with 160+ tests)
+- **Continuous**: No memory leaks (tested with 600+ tests across 19 test files)
 - **No limits**: Can type indefinitely without performance degradation
+- **Cross-platform**: Single Rust core (~3,500 LOC) shared across macOS, Windows, Linux
 
 ---
 
-**Last Updated**: 2025-12-14
+**Last Updated**: 2025-12-25
 **Architecture Version**: 2.0 (Validation-First, Cross-Platform)
-**Platforms**: macOS (v1.0.21+, CGEventTap), Windows (production, SetWindowsHookEx), Linux (beta, Fcitx5)
+**Platforms**: macOS (v1.0.89+, CGEventTap), Windows (production, feature parity, SetWindowsHookEx), Linux (beta, Fcitx5)
 **Diagram Format**: ASCII (compatible with all documentation viewers)
-**Codebase Metrics**: 99,444 tokens, 380,026 chars, 78 files (per repomix analysis)
+**Codebase Metrics**: 364,314 tokens, 1,378,755 chars, 125 files (per repomix v1.9.2 analysis)
+
+**Windows Platform Updates**:
+- ✅ 11 new RustBridge FFI methods for advanced features
+- ✅ 5 advanced settings with Registry persistence
+- ✅ ShortcutsManager service with Registry storage
+- ✅ AdvancedSettingsWindow UI
+- ✅ Full feature parity with macOS version

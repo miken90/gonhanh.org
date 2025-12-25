@@ -67,18 +67,20 @@ gonhanh.org/
 │   ├── windows/                 # Production: WPF/.NET 8 app (~1400 LOC)
 │   │   ├── App.xaml.cs          # Application entry point + setup
 │   │   ├── Core/
-│   │   │   ├── RustBridge.cs    # FFI bridge to Rust engine
+│   │   │   ├── RustBridge.cs    # FFI bridge to Rust engine (11 new FFI methods)
 │   │   │   ├── KeyboardHook.cs  # SetWindowsHookEx keyboard interception
 │   │   │   ├── KeyCodes.cs      # Windows virtual keycodes mapping
 │   │   │   └── TextSender.cs    # Text input simulation (SendInput)
 │   │   ├── Services/
-│   │   │   ├── SettingsService.cs # Registry-based settings persistence
-│   │   │   └── UpdateService.cs   # Windows update checker
+│   │   │   ├── SettingsService.cs   # Registry-based settings (5 new advanced settings)
+│   │   │   ├── UpdateService.cs     # Windows update checker
+│   │   │   └── ShortcutsManager.cs  # User shortcuts management + Registry persistence
 │   │   ├── Views/
 │   │   │   ├── TrayIcon.cs      # System tray icon UI + menu
 │   │   │   ├── OnboardingWindow.xaml.cs # Setup wizard
 │   │   │   ├── AboutWindow.xaml.cs      # About dialog
-│   │   │   └── SettingsWindow.xaml.cs   # Preferences window
+│   │   │   ├── SettingsWindow.xaml.cs   # Preferences window
+│   │   │   └── AdvancedSettingsWindow.xaml.cs # Advanced features config
 │   │   └── libgonhanh_core.dll  # Compiled Rust DLL
 │   │
 │   └── linux/                   # Beta: Fcitx5 addon (~500 LOC)
@@ -291,6 +293,19 @@ AppDelegate for NSApplication. First-run detection, MenuBarController initializa
 
 P/Invoke signatures matching Rust FFI, UTF-32 interop, memory management.
 
+**New Advanced FFI Methods** (11 total):
+- `ime_skip_w_shortcut(bool)` - Skip w→ư shortcut in Telex
+- `ime_esc_restore(bool)` - ESC key restores raw ASCII
+- `ime_free_tone(bool)` - Free tone placement (skip validation)
+- `ime_english_auto_restore(bool)` - Auto-restore English words
+- `ime_auto_capitalize(bool)` - Auto-capitalize after punctuation
+- `ime_clear_all()` - Clear buffer + word history
+- `ime_get_buffer(IntPtr, int)` - Get full buffer (UTF-32)
+- `ime_restore_word(IntPtr)` - Restore Vietnamese word to buffer
+- `ime_add_shortcut(IntPtr, IntPtr)` - Add user shortcut
+- `ime_remove_shortcut(IntPtr)` - Remove shortcut
+- `ime_clear_shortcuts()` - Clear all shortcuts
+
 #### `Core/KeyboardHook.cs` - Keyboard Interception
 **Source**: `platforms/windows/Core/KeyboardHook.cs`
 
@@ -301,10 +316,42 @@ SetWindowsHookEx for system-wide WH_KEYBOARD_LL hook, WM_KEYDOWN processing.
 
 Stores user preferences, input method selection, enable/disable state.
 
+**New Advanced Settings Properties** (5 total):
+- `SkipWShortcut` - Skip w→ư shortcut in Telex mode (default: false)
+- `EscRestore` - ESC key restores raw ASCII input (default: true)
+- `FreeTone` - Enable free tone placement without validation (default: false)
+- `EnglishAutoRestore` - Auto-restore English words like "text", "expect" (default: false)
+- `AutoCapitalize` - Auto-capitalize after sentence-ending punctuation (default: true)
+
+**Registry Keys**:
+- Path: `HKCU\SOFTWARE\GoNhanh`
+- Shortcuts: `HKCU\SOFTWARE\GoNhanh\Shortcuts`
+
+#### `Services/ShortcutsManager.cs` - User Shortcuts Management
+**Source**: `platforms/windows/Services/ShortcutsManager.cs`
+
+Manages user-defined shortcuts (abbreviations like "vn" → "Việt Nam"). Persists shortcuts to Registry, syncs with Rust engine via RustBridge FFI.
+
+**Key Features**:
+- Load/Save shortcuts from/to Registry
+- Add, Remove, Clear shortcuts
+- Default Vietnamese abbreviations (vn, hn, hcm, ko, dc, vs, ms, etc.)
+- Auto-sync with Rust engine on every change
+
 #### `Views/TrayIcon.cs` - System Tray UI
 **Source**: `platforms/windows/Views/TrayIcon.cs`
 
 NotifyIcon creation, context menu: Enable/Disable, Input Method, Settings, About.
+
+#### `Views/AdvancedSettingsWindow.xaml.cs` - Advanced Features UI
+**Source**: `platforms/windows/Views/AdvancedSettingsWindow.xaml.cs`
+
+WPF window for configuring 5 advanced features:
+- Skip W Shortcut (Telex mode w→ư behavior)
+- ESC Restore (ESC key restores raw ASCII)
+- Free Tone (disable validation, place diacritics anywhere)
+- English Auto-Restore (auto-detect and restore English words)
+- Auto-Capitalize (capitalize after . ! ? Enter)
 
 ### Linux Platform (platforms/linux/)
 
@@ -442,8 +489,26 @@ RustBridge.cs (Windows)
 
 ---
 
-**Last Updated**: 2025-12-14
-**Total Lines**: ~16,000 (Rust + Swift + Windows + Linux)
-**Total Tokens**: 99,444 (per repomix analysis)
+**Last Updated**: 2025-12-25
+**Total Files**: 125 files (per latest repomix analysis)
+**Total Tokens**: 364,314 tokens (per repomix v1.9.2 analysis)
+**Total Characters**: 1,378,755 chars
 **Coverage**: 100% of directories documented
-**Platforms**: macOS (v1.0.21+), Windows (production), Linux (beta)
+**Platforms**: macOS (v1.0.89+), Windows (production, feature parity), Linux (beta)
+
+**Windows Platform Feature Parity Achieved**:
+- ✅ 5 Advanced Settings (SkipWShortcut, EscRestore, FreeTone, EnglishAutoRestore, AutoCapitalize)
+- ✅ Shortcuts Manager with Registry persistence
+- ✅ Advanced Settings UI window
+- ✅ 11 new RustBridge FFI methods
+- ✅ Full feature compatibility with macOS version
+
+## Top 5 Largest Files by Token Count
+
+| Rank | File | Tokens | Chars | % of Total |
+|------|------|--------|-------|------------|
+| 1 | `core/src/engine/mod.rs` | 44,881 | 201,327 | 12.2% |
+| 2 | `core/tests/integration_test.rs` | 29,530 | 106,191 | 8.0% |
+| 3 | `docs/vietnamese-language-system.md` | 21,139 | 56,183 | 5.8% |
+| 4 | `core/tests/typing_test.rs` | 20,164 | 59,308 | 5.5% |
+| 5 | `platforms/macos/RustBridge.swift` | 14,421 | 59,869 | 3.9% |
