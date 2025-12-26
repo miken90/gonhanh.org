@@ -64,23 +64,28 @@ gonhanh.org/
 │   │   ├── dmg-resources/       # DMG installer background + resources
 │   │   └── Tests/               # Swift unit tests (LaunchAtLoginTests.swift)
 │   │
-│   ├── windows/                 # Production: WPF/.NET 8 app (~1400 LOC)
-│   │   ├── App.xaml.cs          # Application entry point + setup
+│   ├── windows/                 # Production: WPF/.NET 8 app (~1500 LOC)
+│   │   ├── App.xaml.cs          # Application entry point + global hotkey wiring
 │   │   ├── Core/
-│   │   │   ├── RustBridge.cs    # FFI bridge to Rust engine (11 new FFI methods)
-│   │   │   ├── KeyboardHook.cs  # SetWindowsHookEx keyboard interception
+│   │   │   ├── RustBridge.cs    # FFI bridge to Rust engine (11 FFI methods)
+│   │   │   ├── KeyboardHook.cs  # SetWindowsHookEx + global hotkey detection
+│   │   │   ├── KeyboardShortcut.cs  # Hotkey model with KeyCode+Modifiers
 │   │   │   ├── KeyCodes.cs      # Windows virtual keycodes mapping
-│   │   │   └── TextSender.cs    # Text input simulation (SendInput)
+│   │   │   ├── TextSender.cs    # Text input simulation (SendInput)
+│   │   │   └── AppMetadata.cs   # Shared app constants (version, names)
 │   │   ├── Services/
-│   │   │   ├── SettingsService.cs   # Registry-based settings (5 new advanced settings)
+│   │   │   ├── SettingsService.cs   # Registry settings + ToggleHotkey property
 │   │   │   ├── UpdateService.cs     # Windows update checker
-│   │   │   └── ShortcutsManager.cs  # User shortcuts management + Registry persistence
+│   │   │   └── ShortcutsManager.cs  # User shortcuts + Registry persistence
 │   │   ├── Views/
 │   │   │   ├── TrayIcon.cs      # System tray icon UI + menu
-│   │   │   ├── OnboardingWindow.xaml.cs # Setup wizard
+│   │   │   ├── OnboardingWindow.xaml.cs # Setup wizard + AutoStart checkbox
 │   │   │   ├── AboutWindow.xaml.cs      # About dialog
 │   │   │   ├── SettingsWindow.xaml.cs   # Preferences window
-│   │   │   └── AdvancedSettingsWindow.xaml.cs # Advanced features config
+│   │   │   └── AdvancedSettingsWindow.xaml.cs # Advanced settings + hotkey config
+│   │   ├── Controls/
+│   │   │   ├── HotkeyRecorder.xaml      # HotkeyRecorder UserControl UI
+│   │   │   └── HotkeyRecorder.xaml.cs   # Click-to-record hotkey with keycap UI
 │   │   └── libgonhanh_core.dll  # Compiled Rust DLL
 │   │
 │   └── linux/                   # Beta: Fcitx5 addon (~500 LOC)
@@ -128,6 +133,11 @@ Central `Engine` struct orchestrating 7-stage keystroke processing:
 5. **W-vowel handling** (Telex-specific "w"→"ư") - Context-aware substitution
 6. **Normal letter processing** - Regular keystroke
 7. **Shortcut expansion** (user-defined) - Abbreviation matching
+
+**Uppercase Detection** (line 718, fixed 2025-12-26):
+- `caps || shift` - Uppercase when CapsLock OR Shift is held
+- Previous bug: Only checked `caps`, causing Shift+DD → đ instead of Đ
+- Now correctly produces uppercase diacritical characters with Shift
 
 **Result**: Returns `Result` struct with action (None/Send/Restore), backspace count, output chars
 
@@ -293,7 +303,7 @@ AppDelegate for NSApplication. First-run detection, MenuBarController initializa
 
 P/Invoke signatures matching Rust FFI, UTF-32 interop, memory management.
 
-**New Advanced FFI Methods** (11 total):
+**Advanced FFI Methods** (11 total):
 - `ime_skip_w_shortcut(bool)` - Skip w→ư shortcut in Telex
 - `ime_esc_restore(bool)` - ESC key restores raw ASCII
 - `ime_free_tone(bool)` - Free tone placement (skip validation)
@@ -306,26 +316,51 @@ P/Invoke signatures matching Rust FFI, UTF-32 interop, memory management.
 - `ime_remove_shortcut(IntPtr)` - Remove shortcut
 - `ime_clear_shortcuts()` - Clear all shortcuts
 
-#### `Core/KeyboardHook.cs` - Keyboard Interception
+#### `Core/KeyboardShortcut.cs` - Hotkey Model
+**Source**: `platforms/windows/Core/KeyboardShortcut.cs`
+
+Keyboard shortcut representation with KeyCode + Modifiers (Ctrl/Alt/Shift/Win). Provides Matches() for detection, GetDisplayParts() for UI rendering, and Registry serialization (ToRegistryString/FromRegistryString).
+
+#### `Core/KeyboardHook.cs` - Keyboard Interception + Hotkey Detection
 **Source**: `platforms/windows/Core/KeyboardHook.cs`
 
-SetWindowsHookEx for system-wide WH_KEYBOARD_LL hook, WM_KEYDOWN processing.
+SetWindowsHookEx for system-wide WH_KEYBOARD_LL hook, WM_KEYDOWN processing. Includes Hotkey property for configurable global hotkey and OnHotkeyTriggered event for Vietnamese/English toggle.
+
+#### `Core/TextSender.cs` - Text Input Simulation
+**Source**: `platforms/windows/Core/TextSender.cs`
+
+Sends text to active window using **Unicode injection via SendInput API** with `KEYEVENTF_UNICODE` flag (as of 2025-12-26). Replaced previous clipboard-based method to preserve user's clipboard content and correctly maintain uppercase state.
+
+**Text Injection Strategy**:
+- **Direct Unicode injection**: Characters injected as keyboard events (similar to macOS `CGEvent.keyboardSetUnicodeString`)
+- **No clipboard pollution**: Previously used `Clipboard.SetText()` + Ctrl+V, now uses direct Unicode
+- **Uppercase correctness**: Properly handles Shift state for diacritical characters (Shift+DD → Đ)
+
+**Key Methods**:
+- `SendText(string text, int backspaces)` - Main entry point for text replacement
+- `SendBackspaces(int count, IntPtr marker)` - Batch backspace injection
+- `SendUnicodeText(string text, IntPtr marker)` - Unicode character injection with KEYEVENTF_UNICODE flag
 
 #### `Services/SettingsService.cs` - Registry Persistence
 **Source**: `platforms/windows/Services/SettingsService.cs`
 
-Stores user preferences, input method selection, enable/disable state.
+Stores user preferences, input method selection, enable/disable state, and global hotkey configuration.
 
-**New Advanced Settings Properties** (5 total):
+**Advanced Settings Properties** (5 total):
 - `SkipWShortcut` - Skip w→ư shortcut in Telex mode (default: false)
 - `EscRestore` - ESC key restores raw ASCII input (default: true)
 - `FreeTone` - Enable free tone placement without validation (default: false)
 - `EnglishAutoRestore` - Auto-restore English words like "text", "expect" (default: false)
 - `AutoCapitalize` - Auto-capitalize after sentence-ending punctuation (default: true)
 
+**Hotkey Settings**:
+- `ToggleHotkey` - KeyboardShortcut property for global Vietnamese/English toggle (default: Ctrl+Space)
+- Persisted to Registry, loaded on startup
+
 **Registry Keys**:
 - Path: `HKCU\SOFTWARE\GoNhanh`
 - Shortcuts: `HKCU\SOFTWARE\GoNhanh\Shortcuts`
+- Hotkey: Stored as `ToggleHotkey` string value
 
 #### `Services/ShortcutsManager.cs` - User Shortcuts Management
 **Source**: `platforms/windows/Services/ShortcutsManager.cs`
@@ -343,15 +378,32 @@ Manages user-defined shortcuts (abbreviations like "vn" → "Việt Nam"). Persi
 
 NotifyIcon creation, context menu: Enable/Disable, Input Method, Settings, About.
 
+#### `Views/OnboardingWindow.xaml.cs` - Setup Wizard
+**Source**: `platforms/windows/Views/OnboardingWindow.xaml.cs`
+
+Multi-page setup wizard with AutoStart checkbox on Page 3 for enabling Windows auto-start feature during initial setup.
+
 #### `Views/AdvancedSettingsWindow.xaml.cs` - Advanced Features UI
 **Source**: `platforms/windows/Views/AdvancedSettingsWindow.xaml.cs`
 
-WPF window for configuring 5 advanced features:
+WPF window for configuring 5 advanced features + global hotkey:
+- AutoStart toggle (Windows auto-start on login)
 - Skip W Shortcut (Telex mode w→ư behavior)
 - ESC Restore (ESC key restores raw ASCII)
 - Free Tone (disable validation, place diacritics anywhere)
 - English Auto-Restore (auto-detect and restore English words)
 - Auto-Capitalize (capitalize after . ! ? Enter)
+- Global Hotkey configuration (HotkeyRecorder control)
+
+#### `Controls/HotkeyRecorder.xaml.cs` - Hotkey Recording Control
+**Source**: `platforms/windows/Controls/HotkeyRecorder.xaml.cs`
+
+Custom WPF UserControl for recording keyboard shortcuts. Features:
+- Click-to-record interaction (focus-based recording)
+- Keycap-style UI display (visual keyboard key representation)
+- System shortcut conflict detection (blocks Ctrl+C/V/X/A/Z/Y, Alt+Tab/F4)
+- Validates against reserved Windows shortcuts
+- Exposes Hotkey property for data binding
 
 ### Linux Platform (platforms/linux/)
 
@@ -489,18 +541,32 @@ RustBridge.cs (Windows)
 
 ---
 
-**Last Updated**: 2025-12-25
-**Total Files**: 125 files (per latest repomix analysis)
-**Total Tokens**: 364,314 tokens (per repomix v1.9.2 analysis)
-**Total Characters**: 1,378,755 chars
+**Last Updated**: 2025-12-26
+**Total Files**: 127+ files (includes new HotkeyRecorder control)
+**Total Tokens**: ~370,000+ tokens (estimated)
+**Total Characters**: ~1,400,000+ chars (estimated)
 **Coverage**: 100% of directories documented
-**Platforms**: macOS (v1.0.89+), Windows (production, feature parity), Linux (beta)
+**Platforms**: macOS (v1.0.89+), Windows (production, feature parity + hotkey toggle), Linux (beta)
 
-**Windows Platform Feature Parity Achieved**:
+**Windows Platform Recent Updates (2025-12-26)**:
+- ✅ **Unicode text injection** - Replaced clipboard-based injection (TextSender.cs, preserves clipboard)
+- ✅ **Uppercase fix** - Engine checks CapsLock OR Shift (mod.rs:718, Shift+DD → Đ works correctly)
+- ✅ Global hotkey toggle (Ctrl+Space default, configurable)
+- ✅ HotkeyRecorder UserControl with keycap-style UI
+- ✅ KeyboardShortcut model with Registry serialization
+- ✅ AutoStart UI in OnboardingWindow (Page 3)
+- ✅ Hotkey configuration in AdvancedSettingsWindow
+- ✅ KeyboardHook integration with OnHotkeyTriggered event
+- ✅ System shortcut conflict detection
+
+**Windows Platform Complete Features**:
 - ✅ 5 Advanced Settings (SkipWShortcut, EscRestore, FreeTone, EnglishAutoRestore, AutoCapitalize)
 - ✅ Shortcuts Manager with Registry persistence
 - ✅ Advanced Settings UI window
-- ✅ 11 new RustBridge FFI methods
+- ✅ 11 RustBridge FFI methods
+- ✅ Global hotkey toggle
+- ✅ Auto-start configuration
+- ✅ Unicode text injection (clipboard-safe)
 - ✅ Full feature compatibility with macOS version
 
 ## Top 5 Largest Files by Token Count

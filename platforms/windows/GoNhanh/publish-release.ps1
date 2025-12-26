@@ -1,9 +1,11 @@
 # GoNhanh Windows - Release Build Script
 # Creates a portable zip package for distribution
+# Output: Releases/GoNhanh-{Version}-win-x64.zip
 
 param(
-    [string]$Version = "1.0.0",
+    [string]$Version = "1.2.0",
     [string]$OutputDir = "./publish",
+    [string]$ReleasesDir = "./Releases",
     [switch]$SkipBuild
 )
 
@@ -13,6 +15,13 @@ $ProjectDir = $PSScriptRoot
 Write-Host "=== GoNhanh Windows Release Builder ===" -ForegroundColor Cyan
 Write-Host "Version: $Version"
 Write-Host ""
+
+# Ensure Releases directory exists
+$ReleasesPath = Join-Path $ProjectDir $ReleasesDir
+if (-not (Test-Path $ReleasesPath)) {
+    New-Item -ItemType Directory -Path $ReleasesPath -Force | Out-Null
+    Write-Host "Created Releases directory" -ForegroundColor Gray
+}
 
 # Step 1: Build self-contained release
 if (-not $SkipBuild) {
@@ -61,10 +70,10 @@ if (Test-Path $PdbFile) {
     Write-Host "   Removed debug symbols (PDB)" -ForegroundColor Green
 }
 
-# Step 4: Create zip package
+# Step 4: Create zip package in Releases folder
 Write-Host "[4/4] Creating zip package..." -ForegroundColor Yellow
 $ZipName = "GoNhanh-$Version-win-x64.zip"
-$ZipPath = Join-Path $ProjectDir $ZipName
+$ZipPath = Join-Path $ReleasesPath $ZipName
 $PublishPath = Join-Path $ProjectDir $OutputDir
 
 # Remove old zip if exists

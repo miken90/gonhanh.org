@@ -140,23 +140,34 @@ User Keystroke (CGEventTap/SetWindowsHookEx)
 
 ### Phase 2: Cross-Platform (Windows Complete, Linux In Progress)
 
-**Windows 10/11 (Complete - Production Ready, Feature Parity Achieved)**
+**Windows 10/11 (Complete - Production Ready, Feature Parity + Global Hotkey)**
 - SetWindowsHookEx keyboard hook
 - WPF/.NET 8 UI with system tray
 - Registry-based settings persistence
-- **NEW: 5 Advanced Settings**:
+- **5 Advanced Settings**:
   - Skip W Shortcut (w→ư control in Telex)
   - ESC Restore (ESC reverts to raw ASCII)
   - Free Tone (skip validation, place diacritics anywhere)
   - English Auto-Restore (auto-detect English words)
   - Auto-Capitalize (capitalize after . ! ? Enter)
-- **NEW: Shortcuts Manager**:
+- **Shortcuts Manager**:
   - User-defined abbreviations with Registry persistence
   - Default Vietnamese abbreviations (vn, hn, hcm, ko, dc, vs, ms)
-  - Auto-sync with Rust engine via 11 new FFI methods
-- **NEW: Advanced Settings UI**:
+  - Auto-sync with Rust engine via 11 FFI methods
+- **Advanced Settings UI**:
   - AdvancedSettingsWindow.xaml for configuration
   - Full feature compatibility with macOS version
+- **Global Hotkey Toggle** (NEW - 2025-12-26):
+  - Configurable keyboard shortcut (default: Ctrl+Space)
+  - KeyboardShortcut model with Registry serialization
+  - HotkeyRecorder UserControl with keycap-style UI
+  - System shortcut conflict detection
+  - OnHotkeyTriggered event integration in KeyboardHook
+  - App.xaml.cs wiring for hotkey → toggle IME state
+- **Auto-Start Configuration** (NEW - 2025-12-26):
+  - Windows auto-start on login via Registry
+  - UI in OnboardingWindow (Page 3) and AdvancedSettingsWindow
+  - SettingsService management
 - Compiled DLL shared with macOS core
 
 **Linux (Beta)**
@@ -255,13 +266,15 @@ Examples:
 - Production-ready on macOS and Windows
 
 **v1.1+ Releases** (Current)
-- Cross-platform support (macOS ✓, Windows ✓ feature parity, Linux in progress)
+- Cross-platform support (macOS ✓, Windows ✓ feature parity + hotkey, Linux in progress)
 - User-customizable shortcuts (implemented on both platforms)
-- **Windows Advanced Features** (NEW):
+- **Windows Advanced Features**:
   - 5 advanced settings (SkipWShortcut, EscRestore, FreeTone, EnglishAutoRestore, AutoCapitalize)
   - Shortcuts Manager with Registry persistence
   - AdvancedSettingsWindow UI
-  - 11 new RustBridge FFI methods
+  - 11 RustBridge FFI methods
+  - **Global hotkey toggle (NEW - 2025-12-26)**
+  - **Auto-start configuration (NEW - 2025-12-26)**
 - Enhanced documentation (ongoing)
 - Community contribution guidelines (CONTRIBUTING.md)
 - Auto-restore English patterns (implemented)
@@ -269,15 +282,32 @@ Examples:
 
 ---
 
-**Last Updated**: 2025-12-25
+**Last Updated**: 2025-12-26
 **Status**: Active Development
 **Current Version**: v1.0.89
-**Platforms**: macOS (production), Windows (production, feature parity achieved), Linux (beta)
+**Platforms**: macOS (production), Windows (production, feature parity + hotkey toggle), Linux (beta)
 **Repository**: https://github.com/khaphanspace/gonhanh.org
 
-**Windows Platform Status**:
+**Windows Platform Recent Updates (2025-12-26)**:
+- ✅ **Unicode text injection fix** - Replaced clipboard-based injection with SendInput API + KEYEVENTF_UNICODE
+  - Preserves user's clipboard content when typing Vietnamese
+  - Fixes clipboard override issue reported by users
+- ✅ **Uppercase detection fix** - Engine checks both CapsLock AND Shift (mod.rs:718)
+  - Shift+DD now correctly produces uppercase Đ (was lowercase đ)
+  - Fixes uppercase loss with diacritical characters
+- ✅ Global hotkey toggle (Ctrl+Space default, configurable)
+- ✅ KeyboardShortcut model with Registry serialization
+- ✅ HotkeyRecorder UserControl with keycap-style UI and conflict detection
+- ✅ AutoStart UI in OnboardingWindow (Page 3) and AdvancedSettingsWindow
+- ✅ KeyboardHook OnHotkeyTriggered event integration
+- ✅ App.xaml.cs wiring for hotkey → toggle IME
+
+**Windows Platform Complete Features**:
 - ✅ Feature parity with macOS achieved
 - ✅ 5 advanced settings implemented
 - ✅ Shortcuts Manager with Registry persistence
 - ✅ Advanced Settings UI
+- ✅ Global hotkey toggle
+- ✅ Auto-start configuration
+- ✅ Unicode text injection (clipboard-safe, uppercase-correct)
 - ✅ Production-ready build

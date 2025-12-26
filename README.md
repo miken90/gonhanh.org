@@ -40,8 +40,8 @@ brew install --cask gonhanh
 | Nền tảng | Trạng thái | Tải xuống | Hướng dẫn |
 |:--------:|:----------:|:---------:|:----------|
 | **macOS** | ✅ Sẵn sàng | [📥 Tải GoNhanh.dmg](https://github.com/khaphanspace/gonhanh.org/releases/latest/download/GoNhanh.dmg) | [Xem hướng dẫn](docs/install-macos.md) |
+| **Windows** | ✅ Sẵn sàng | [📥 Tải GoNhanh.zip](https://github.com/khaphanspace/gonhanh.org/releases/latest) | [Xem hướng dẫn](docs/install-windows.md) |
 | **Linux** | 🧪 Beta | — | [Xem hướng dẫn](docs/install-linux.md) |
-| **Windows** | 🧪 Beta | — | [Xem hướng dẫn](docs/install-windows.md) |
 
 <details>
 <summary><strong>⚠️ macOS: App không mở được?</strong></summary>
@@ -79,7 +79,7 @@ Sau đó: **System Settings → Privacy & Security → Accessibility → Bật G
 - ✂️ **Gõ tắt** — `vn` → `Việt Nam`, `ko` → `không`
 - 🔌 **Mọi app** — VS Code, Zed, Chrome, Notion, Terminal, Ghostty...
 - 🌗 **Dark/Light** — Theo hệ thống
-- 💻 **Đa nền tảng** — macOS, Linux, Windows (beta)
+- 💻 **Đa nền tảng** — macOS (production), Windows (production), Linux (beta)
 
 ### 🛡️ Cam kết "Ba Không"
 

@@ -464,6 +464,25 @@ Visible to user as transformed or original text
 
 ## Performance Characteristics
 
+### Windows Platform Text Injection
+
+**Text Injection Method** (Windows-specific implementation):
+
+Windows uses **Unicode injection via SendInput API** with `KEYEVENTF_UNICODE` flag:
+- **Direct Unicode injection**: Characters injected as keyboard events (similar to macOS `CGEvent.keyboardSetUnicodeString`)
+- **Preserves clipboard**: User's clipboard content remains unchanged when typing Vietnamese
+- **Uppercase correctness**: Shift state properly maintained for diacritical characters (Shift+DD → Đ)
+- **No clipboard pollution**: Previous implementation used `Clipboard.SetText()` + Ctrl+V, which overwrote user's clipboard
+
+**Implementation** (`TextSender.cs`):
+```csharp
+// Each character sent as Unicode keyboard event
+wVk = 0,
+wScan = c,              // UTF-16 character code
+dwFlags = KEYEVENTF_UNICODE,
+dwExtraInfo = marker    // Mark as injected to avoid re-processing
+```
+
 ### Windows Platform Advanced Features
 
 **5 Advanced Settings** (Windows feature parity with macOS achieved):
@@ -493,6 +512,21 @@ Visible to user as transformed or original text
    - Triggers after: . ! ? Enter
    - Default: true
 
+**Global Hotkey Toggle** (NEW - 2025-12-26):
+- Configurable keyboard shortcut to toggle Vietnamese/English input (default: Ctrl+Space)
+- KeyboardShortcut model: KeyCode + Modifiers (Ctrl/Alt/Shift/Win)
+- HotkeyRecorder UserControl for recording shortcuts with keycap-style UI
+- System shortcut conflict detection (blocks Ctrl+C/V/X/A/Z/Y, Alt+Tab/F4)
+- Hotkey detection integrated in KeyboardHook via OnHotkeyTriggered event
+- Registry persistence: `HKCU\SOFTWARE\GoNhanh\ToggleHotkey`
+- Wired up in App.xaml.cs to toggle IME enabled/disabled state
+
+**Auto-Start Configuration** (NEW - 2025-12-26):
+- Windows auto-start on login via Registry (`HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`)
+- UI toggle in OnboardingWindow (Page 3 during setup)
+- UI toggle in AdvancedSettingsWindow for existing users
+- SettingsService manages auto-start state
+
 **Shortcuts Manager**:
 - User-defined abbreviations (vn→Việt Nam, ko→không)
 - Registry persistence at `HKCU\SOFTWARE\GoNhanh\Shortcuts`
@@ -502,6 +536,7 @@ Visible to user as transformed or original text
 **Registry Settings**:
 - Path: `HKCU\SOFTWARE\GoNhanh`
 - 5 advanced settings stored as DWord values
+- ToggleHotkey stored as string value (KeyCode:Modifiers format)
 - Shortcuts stored in subkey with trigger→replacement mapping
 - Auto-start integration via `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`
 
@@ -533,15 +568,28 @@ Visible to user as transformed or original text
 
 ---
 
-**Last Updated**: 2025-12-25
+**Last Updated**: 2025-12-26
 **Architecture Version**: 2.0 (Validation-First, Cross-Platform)
-**Platforms**: macOS (v1.0.89+, CGEventTap), Windows (production, feature parity, SetWindowsHookEx), Linux (beta, Fcitx5)
+**Platforms**: macOS (v1.0.89+, CGEventTap), Windows (production, feature parity + hotkey toggle, SetWindowsHookEx), Linux (beta, Fcitx5)
 **Diagram Format**: ASCII (compatible with all documentation viewers)
-**Codebase Metrics**: 364,314 tokens, 1,378,755 chars, 125 files (per repomix v1.9.2 analysis)
+**Codebase Metrics**: ~370,000+ tokens (estimated), ~1,400,000+ chars (estimated), 127+ files
 
-**Windows Platform Updates**:
-- ✅ 11 new RustBridge FFI methods for advanced features
+**Windows Platform Recent Updates (2025-12-26)**:
+- ✅ **Unicode text injection** - Replaced clipboard-based injection (preserves clipboard, fixes uppercase)
+- ✅ **Uppercase fix** - Engine checks both CapsLock and Shift (Shift+DD now produces Đ correctly)
+- ✅ Global hotkey toggle (Ctrl+Space default, configurable via HotkeyRecorder)
+- ✅ KeyboardShortcut model with Registry serialization
+- ✅ HotkeyRecorder UserControl with keycap-style UI and conflict detection
+- ✅ AutoStart UI in OnboardingWindow (Page 3) and AdvancedSettingsWindow
+- ✅ KeyboardHook OnHotkeyTriggered event integration
+- ✅ App.xaml.cs wiring for hotkey → toggle IME state
+
+**Windows Platform Complete Features**:
+- ✅ 11 RustBridge FFI methods for advanced features
 - ✅ 5 advanced settings with Registry persistence
 - ✅ ShortcutsManager service with Registry storage
 - ✅ AdvancedSettingsWindow UI
+- ✅ Global hotkey toggle
+- ✅ Auto-start configuration
+- ✅ Unicode text injection (clipboard-safe)
 - ✅ Full feature parity with macOS version
