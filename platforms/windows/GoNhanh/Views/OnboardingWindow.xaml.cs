@@ -57,6 +57,10 @@ public partial class OnboardingWindow : Window
         _settings.CurrentMethod = OnboardTelexRadio.IsChecked == true
             ? Core.InputMethod.Telex
             : Core.InputMethod.VNI;
+
+        // Save auto-start preference
+        _settings.AutoStart = AutoStartCheckBox.IsChecked == true;
+
         _settings.Save();
 
         Close();

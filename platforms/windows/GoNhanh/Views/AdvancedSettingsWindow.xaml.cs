@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
+using GoNhanh.Core;
 using GoNhanh.Services;
 
 namespace GoNhanh.Views;
@@ -36,6 +37,10 @@ public partial class AdvancedSettingsWindow : Window
         FreeToneCheckBox.IsChecked = _settings.FreeTone;
         EnglishAutoRestoreCheckBox.IsChecked = _settings.EnglishAutoRestore;
         AutoCapitalizeCheckBox.IsChecked = _settings.AutoCapitalize;
+        AutoStartCheckBox.IsChecked = _settings.AutoStart;
+
+        // Load toggle hotkey
+        HotkeyRecorderControl.Shortcut = _settings.ToggleHotkey;
     }
 
     private void LoadShortcuts()
@@ -62,6 +67,10 @@ public partial class AdvancedSettingsWindow : Window
         _settings.FreeTone = FreeToneCheckBox.IsChecked ?? false;
         _settings.EnglishAutoRestore = EnglishAutoRestoreCheckBox.IsChecked ?? false;
         _settings.AutoCapitalize = AutoCapitalizeCheckBox.IsChecked ?? true;
+        _settings.AutoStart = AutoStartCheckBox.IsChecked ?? false;
+
+        // Save toggle hotkey
+        _settings.ToggleHotkey = HotkeyRecorderControl.Shortcut;
 
         _settings.Save();
     }

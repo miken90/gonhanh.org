@@ -75,6 +75,20 @@ public class KeyboardHook : IDisposable
 
     public event EventHandler<KeyPressedEventArgs>? KeyPressed;
 
+    /// <summary>
+    /// Event raised when the toggle hotkey is pressed
+    /// </summary>
+    public event Action? OnHotkeyTriggered;
+
+    #endregion
+
+    #region Properties
+
+    /// <summary>
+    /// The hotkey that triggers toggle
+    /// </summary>
+    public KeyboardShortcut? Hotkey { get; set; }
+
     #endregion
 
     #region Public Methods
@@ -146,13 +160,21 @@ public class KeyboardHook : IDisposable
 
             ushort keyCode = (ushort)hookStruct.vkCode;
 
+            // Check for toggle hotkey FIRST (before any other processing)
+            bool shift = IsKeyDown(KeyCodes.VK_SHIFT);
+            bool ctrl = IsKeyDown(KeyCodes.VK_CONTROL);
+            bool alt = IsKeyDown(KeyCodes.VK_MENU);
+
+            if (Hotkey != null && Hotkey.Matches(keyCode, ctrl, alt, shift))
+            {
+                OnHotkeyTriggered?.Invoke();
+                return (IntPtr)1; // Consume the key
+            }
+
             // Only process relevant keys for Vietnamese input
             if (KeyCodes.IsRelevantKey(keyCode))
             {
-                bool shift = IsKeyDown(KeyCodes.VK_SHIFT);
                 bool capsLock = IsCapsLockOn();
-                bool ctrl = IsKeyDown(KeyCodes.VK_CONTROL);
-                bool alt = IsKeyDown(KeyCodes.VK_MENU);
 
                 // Skip if Ctrl or Alt is pressed (shortcuts)
                 if (ctrl || alt)

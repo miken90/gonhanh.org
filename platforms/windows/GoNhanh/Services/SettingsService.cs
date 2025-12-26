@@ -25,6 +25,7 @@ public class SettingsService
     private const string KeyFreeTone = "FreeTone";
     private const string KeyEnglishAutoRestore = "EnglishAutoRestore";
     private const string KeyAutoCapitalize = "AutoCapitalize";
+    private const string KeyToggleHotkey = "ToggleHotkey";
 
     #endregion
 
@@ -61,6 +62,12 @@ public class SettingsService
     /// </summary>
     public bool AutoCapitalize { get; set; } = true;
 
+    /// <summary>
+    /// Global hotkey to toggle Vietnamese/English input
+    /// Default: Ctrl+Space
+    /// </summary>
+    public KeyboardShortcut ToggleHotkey { get; set; } = KeyboardShortcut.Default;
+
     #endregion
 
     #region Public Methods
@@ -92,6 +99,10 @@ public class SettingsService
             FreeTone = ((int)(key.GetValue(KeyFreeTone, 0) ?? 0)) == 1;
             EnglishAutoRestore = ((int)(key.GetValue(KeyEnglishAutoRestore, 0) ?? 0)) == 1;
             AutoCapitalize = ((int)(key.GetValue(KeyAutoCapitalize, 1) ?? 1)) == 1;  // Default true
+
+            // Load toggle hotkey
+            var hotkeyStr = key.GetValue(KeyToggleHotkey) as string;
+            ToggleHotkey = KeyboardShortcut.FromRegistryString(hotkeyStr) ?? KeyboardShortcut.Default;
         }
         catch (Exception ex)
         {
@@ -121,6 +132,9 @@ public class SettingsService
                 key.SetValue(KeyFreeTone, FreeTone ? 1 : 0, RegistryValueKind.DWord);
                 key.SetValue(KeyEnglishAutoRestore, EnglishAutoRestore ? 1 : 0, RegistryValueKind.DWord);
                 key.SetValue(KeyAutoCapitalize, AutoCapitalize ? 1 : 0, RegistryValueKind.DWord);
+
+                // Save toggle hotkey
+                key.SetValue(KeyToggleHotkey, ToggleHotkey.ToRegistryString(), RegistryValueKind.String);
             }
 
             // Update auto-start registry

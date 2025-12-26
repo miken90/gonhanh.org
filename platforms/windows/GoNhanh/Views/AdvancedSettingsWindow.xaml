@@ -1,8 +1,9 @@
 <Window x:Class="GoNhanh.Views.AdvancedSettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:GoNhanh.Controls"
         Title="Cài đặt nâng cao"
-        Height="600" Width="600"
+        Height="650" Width="600"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResize"
         Background="{StaticResource BackgroundBrush}">
@@ -64,7 +65,36 @@
 
                         <!-- Auto Capitalize -->
                         <CheckBox x:Name="AutoCapitalizeCheckBox"
-                                  Content="Tự động viết hoa chữ cái đầu câu"/>
+                                  Content="Tự động viết hoa chữ cái đầu câu"
+                                  Margin="0,0,0,12"/>
+
+                        <!-- Separator -->
+                        <Rectangle Height="1" Fill="#E5E7EB" Margin="0,4,0,12"/>
+
+                        <!-- Auto-start -->
+                        <CheckBox x:Name="AutoStartCheckBox"
+                                  Content="Khởi động cùng Windows"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Toggle Hotkey Section -->
+                <TextBlock Text="Phím tắt bật/tắt"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextBrush}"
+                           Margin="0,8,0,12"/>
+
+                <Border BorderBrush="#E5E7EB"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="16"
+                        Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="Nhấp để ghi phím tắt bật/tắt bộ gõ:"
+                                   FontSize="13"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   Margin="0,0,0,8"/>
+                        <controls:HotkeyRecorder x:Name="HotkeyRecorderControl"/>
                     </StackPanel>
                 </Border>
 

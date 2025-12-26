@@ -1,0 +1,50 @@
+<UserControl x:Class="GoNhanh.Controls.HotkeyRecorder"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Focusable="True"
+             FocusVisualStyle="{x:Null}">
+    <Border x:Name="MainBorder"
+            BorderBrush="#E5E7EB"
+            BorderThickness="1"
+            CornerRadius="6"
+            Background="White"
+            Padding="12,8"
+            Cursor="Hand"
+            MouseDown="Border_MouseDown">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Shortcut display -->
+            <StackPanel x:Name="KeysPanel"
+                        Grid.Column="0"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center"/>
+
+            <!-- Recording state text -->
+            <TextBlock x:Name="RecordingText"
+                       Grid.Column="0"
+                       Text="Nhấn phím tắt..."
+                       Foreground="#9CA3AF"
+                       FontStyle="Italic"
+                       VerticalAlignment="Center"
+                       Visibility="Collapsed"/>
+
+            <!-- Clear button -->
+            <Button x:Name="ClearButton"
+                    Grid.Column="1"
+                    Content="×"
+                    FontSize="16"
+                    Padding="4,0"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Foreground="#9CA3AF"
+                    Cursor="Hand"
+                    VerticalAlignment="Center"
+                    Click="ClearButton_Click"
+                    ToolTip="Xóa phím tắt"/>
+        </Grid>
+    </Border>
+</UserControl>

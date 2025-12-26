@@ -47,6 +47,8 @@ public partial class App : System.Windows.Application
         // Initialize keyboard hook
         _keyboardHook = new KeyboardHook();
         _keyboardHook.KeyPressed += OnKeyPressed;
+        _keyboardHook.Hotkey = _settings.ToggleHotkey;
+        _keyboardHook.OnHotkeyTriggered += OnHotkeyTriggered;
         _keyboardHook.Start();
 
         // Initialize system tray
@@ -92,6 +94,12 @@ public partial class App : System.Windows.Application
         RustBridge.SetFreeTone(_settings.FreeTone);
         RustBridge.SetEnglishAutoRestore(_settings.EnglishAutoRestore);
         RustBridge.SetAutoCapitalize(_settings.AutoCapitalize);
+
+        // Update hotkey in keyboard hook
+        if (_keyboardHook != null)
+        {
+            _keyboardHook.Hotkey = _settings.ToggleHotkey;
+        }
     }
 
     private void OnKeyPressed(object? sender, KeyPressedEventArgs e)
@@ -137,6 +145,17 @@ public partial class App : System.Windows.Application
         _settings.IsEnabled = enabled;
         _settings.Save();
         RustBridge.SetEnabled(enabled);
+    }
+
+    private void OnHotkeyTriggered()
+    {
+        Dispatcher.Invoke(() =>
+        {
+            _settings.IsEnabled = !_settings.IsEnabled;
+            _settings.Save();
+            RustBridge.SetEnabled(_settings.IsEnabled);
+            _trayIcon?.UpdateState(_settings.CurrentMethod, _settings.IsEnabled);
+        });
     }
 
     private void ShowAdvancedSettings()
