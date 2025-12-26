@@ -9,9 +9,9 @@ Gõ Nhanh for Windows is a production-ready Vietnamese Input Method Engine built
 ## Yêu cầu hệ thống
 
 - **Hệ điều hành**: Windows 10 (1809+) hoặc Windows 11
-- **.NET Runtime**: .NET 8.0 Desktop Runtime (tự động cài khi cần)
+- **.NET Runtime**: Không cần cài đặt (self-contained)
 - **RAM**: Tối thiểu 4GB
-- **Dung lượng**: ~15MB
+- **Dung lượng**: ~70MB (single-file portable)
 
 ---
 
@@ -159,9 +159,9 @@ Tray Icon → Input Method → Chọn Telex hoặc VNI
 
 ### Ứng dụng không khởi động
 
-1. **Kiểm tra .NET 8**: Tải và cài [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)
-2. **Kiểm tra antivirus**: Thêm `GoNhanh.exe` vào danh sách ngoại lệ
-3. **Chạy với quyền Administrator**: Chuột phải → Run as Administrator
+1. **Kiểm tra antivirus**: Thêm `GoNhanh.exe` vào danh sách ngoại lệ
+2. **Chạy với quyền Administrator**: Chuột phải → Run as Administrator
+3. **Kiểm tra Windows version**: Yêu cầu Windows 10 (1809+) hoặc Windows 11
 
 ### Không gõ được tiếng Việt
 

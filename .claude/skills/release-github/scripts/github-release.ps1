@@ -77,10 +77,8 @@ if (-not $SkipBuild) {
     Write-Host "[2/5] Building .NET app..." -ForegroundColor Yellow
     Push-Location $WindowsDir
     try {
-        dotnet publish -c Release -r win-x64 `
-            --self-contained true `
-            -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
+        # Build settings are in .csproj (SelfContained, Compression, etc.)
+        dotnet publish -c Release `
             -p:Version=$Version `
             -o ./publish
 
@@ -95,11 +93,7 @@ if (-not $SkipBuild) {
     $PublishDir = Join-Path $WindowsDir "publish"
     Copy-Item (Join-Path $WindowsDir "Native\gonhanh_core.dll") -Destination $PublishDir -Force
 
-    # Remove PDB
-    $PdbFile = Join-Path $PublishDir "GoNhanh.pdb"
-    if (Test-Path $PdbFile) {
-        Remove-Item $PdbFile -Force
-    }
+    # PDB already excluded via DebugType=none in .csproj
 }
 else {
     Write-Host "[2/5] Skipping .NET build (--SkipBuild)" -ForegroundColor Gray

@@ -21,9 +21,22 @@
     <!-- Build Settings -->
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <SelfContained>false</SelfContained>
+
+    <!-- OPTIMIZE: Self-contained with compression -->
+    <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+
+    <!-- OPTIMIZE: Disable ReadyToRun (saves 30-40MB) -->
+    <PublishReadyToRun>false</PublishReadyToRun>
+
+    <!-- OPTIMIZE: Remove debug symbols -->
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+
+    <!-- SAFE: No trimming for WPF stability -->
+    <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
 
   <!-- Native DLL -->

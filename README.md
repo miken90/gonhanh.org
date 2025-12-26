@@ -43,6 +43,8 @@ brew install --cask gonhanh
 | **Windows** | ✅ Sẵn sàng | [📥 Tải GoNhanh.zip](https://github.com/khaphanspace/gonhanh.org/releases/latest) | [Xem hướng dẫn](docs/install-windows.md) |
 | **Linux** | 🧪 Beta | — | [Xem hướng dẫn](docs/install-linux.md) |
 
+> **Lưu ý Windows:** File GoNhanh.zip ~70MB (self-contained, không cần cài .NET Runtime)
+
 <details>
 <summary><strong>⚠️ macOS: App không mở được?</strong></summary>
 

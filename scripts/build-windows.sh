@@ -95,7 +95,7 @@ if ! command -v dotnet &> /dev/null; then
     exit 1
 fi
 
-dotnet publish -c Release -r win-x64 --self-contained false \
+dotnet publish -c Release \
     -p:Version="$VERSION" \
     -p:FileVersion="$VERSION" \
     -p:AssemblyVersion="${VERSION%%.*}.0.0.0" \
