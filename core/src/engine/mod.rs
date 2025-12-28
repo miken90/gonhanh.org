@@ -3350,14 +3350,29 @@ impl Engine {
         // Check short suffixes with stricter conditions:
         // - Buffer must be exactly 4 chars (short words like "user", not longer like "userer")
         // - Must end with -er or -or
-        // - First two chars must be consonant + vowel (to avoid false positives)
-        if buf_str.len() == 4 {
+        // - Raw input must have exactly 5 chars (one more than buffer due to double modifier)
+        // - The double must be 'ss' only (not 'ff', 'rr', etc.) because:
+        //   - "usser" → "user" is a common typing pattern when reverting sắc mark
+        //   - "offer", "differ", "suffer" are legitimate English words with double 'f'
+        //   - "error", "mirror" have double 'r' as legitimate English
+        // - The double 's' must appear exactly twice (not "assessor")
+        if buf_str.len() == 4 && self.raw_input.len() == 5 {
             for suffix in SHORT_SUFFIXES {
                 if buf_str.ends_with(suffix) {
-                    let first_char = buf_str.chars().next().unwrap_or('a');
-                    let is_first_consonant = !matches!(first_char, 'a' | 'e' | 'i' | 'o' | 'u');
-                    if is_first_consonant {
-                        return true;
+                    // Only check for double 's' at position 1,2 (0-indexed)
+                    // Pattern: V-SS-V-C like "usser" → "user"
+                    let (key_1, _, _) = self.raw_input[1];
+                    let (key_2, _, _) = self.raw_input[2];
+                    if key_1 == keys::S && key_2 == keys::S {
+                        // Check 's' appears exactly twice
+                        let s_count = self
+                            .raw_input
+                            .iter()
+                            .filter(|(k, _, _)| *k == keys::S)
+                            .count();
+                        if s_count == 2 {
+                            return true;
+                        }
                     }
                 }
             }
@@ -3392,22 +3407,90 @@ impl Engine {
             }
         }
 
-        // Check for double 's' in middle with exactly 2 chars after
-        // Pattern: "usser" → buffer "user" (double 's' in middle, ends with consonant 'r')
-        // This handles cases where user types "usser" to get "user"
-        // Only apply for double 's' (sắc mark) - most common revert pattern
-        // - "usser": u-ss-e-r → use buffer "user"
-        // - "offer": o-ff-e-r → keep raw "offer" (real word with double 'f')
-        if self.raw_input.len() == 5 && buf_str.len() == 4 {
-            let (last_key, _, _) = self.raw_input[4];
-            let (key_1, _, _) = self.raw_input[1];
-            let (key_2, _, _) = self.raw_input[2];
+        // Generic check: double Telex modifier in middle with EXACTLY 2 chars after
+        // Pattern: raw has double modifier (ss/ff/rr/xx/jj) followed by V+C (vowel+consonant)
+        // Examples:
+        // - "sarrah" → "sarah" (double 'r' + "ah" = V+C)
+        // - "usser" → "user" (double 's' + "er" = V+C) [also handled by specific check above]
+        //
+        // IMPORTANT constraints to avoid false positives on real English words:
+        // 1. Buffer must be plain ASCII (no Vietnamese transforms)
+        // 2. Raw must end with consonant (not vowel like "issue")
+        // 3. Suffix after double must be short: exactly 2 chars (V+C pattern)
+        //    This excludes "current" (suffix "ent" = 3 chars), "effect" (suffix "ect" = 3 chars)
+        // 4. Only apply if exactly 2 occurrences of the modifier (not "assess")
+        // 5. For safety, only apply to double 'r', 'x', 'j' (not 's' or 'f' which are more
+        //    common in legitimate English doubles like "professor", "different")
+        //    Double 's' is already handled by specific check above.
+        // 6. Exclude common English suffixes after double consonant:
+        //    - "ow" (borrow, sorrow, tomorrow), "or" (error, mirror, horror)
+        //    - "ry"/"y" (carry, sorry, worry), "ed" (occurred, referred)
+        //    These are legitimate English words, not typing mistakes.
+        const RARE_DOUBLE_MODIFIERS: &[u16] = &[keys::R, keys::X, keys::J];
 
-            // Only apply for double 's' (not 'f', 'r', etc. which have common English doubles)
-            if key_1 == keys::S && key_2 == keys::S {
-                // Raw must end with consonant that's NOT 's'
-                if keys::is_consonant(last_key) && last_key != keys::S {
-                    return true;
+        if self.raw_input.len() >= 4 && self.raw_input.len() == buf_str.len() + 1 {
+            // Constraint 1: Buffer must be plain ASCII (no Vietnamese transforms)
+            let has_transforms = self
+                .buf
+                .iter()
+                .any(|c| c.tone > 0 || c.mark > 0 || c.stroke);
+            if has_transforms {
+                return false;
+            }
+
+            // Constraint 2: Raw must end with consonant
+            let (last_key, _, _) = self.raw_input[self.raw_input.len() - 1];
+            if !keys::is_consonant(last_key) {
+                return false;
+            }
+
+            // Constraint 6: Exclude common English suffixes after double consonant
+            // Get last 2 key codes
+            let (last_key_1, _, _) = self.raw_input[self.raw_input.len() - 1];
+            let (last_key_2, _, _) = self.raw_input[self.raw_input.len() - 2];
+
+            // Common English suffixes that appear after double consonants:
+            // - "ow" (borrow, sorrow), "or" (error, mirror), "ry" (carry, sorry, worry)
+            // - "ed" (occurred, referred), "ly" (hurriedly)
+            // Note: "er" is NOT excluded here because the SHORT_SUFFIXES check above
+            // handles 4-char words ending with "er", and longer words like "error"
+            // have 3+ occurrences which is excluded by occurrence count check.
+            let is_common_suffix = matches!(
+                (last_key_2, last_key_1),
+                (keys::O, keys::W)   // ow: borrow, sorrow
+                    | (keys::O, keys::R) // or: error, mirror, horror
+                    | (keys::R, keys::Y) // ry: carry, sorry, worry
+                    | (keys::E, keys::D) // ed: occurred, referred
+                    | (keys::L, keys::Y) // ly: hurriedly
+            );
+            if is_common_suffix {
+                return false;
+            }
+
+            // Find double modifier with exactly 2 chars after (V+C or C+C pattern)
+            for i in 0..self.raw_input.len().saturating_sub(2) {
+                let (key_i, _, _) = self.raw_input[i];
+                let (key_next, _, _) = self.raw_input[i + 1];
+
+                if RARE_DOUBLE_MODIFIERS.contains(&key_i) && key_i == key_next {
+                    // Double modifier found at position i, i+1
+                    let chars_after_double = self.raw_input.len() - (i + 2);
+
+                    // Constraint 3: Exactly 2 chars after double
+                    // This excludes longer suffixes like "ent" (current), "ect" (effect)
+                    if chars_after_double == 2 {
+                        // Count total occurrences of this modifier
+                        let occurrence_count = self
+                            .raw_input
+                            .iter()
+                            .filter(|(k, _, _)| *k == key_i)
+                            .count();
+
+                        // Constraint 4: Only 2 occurrences
+                        if occurrence_count == 2 {
+                            return true;
+                        }
+                    }
                 }
             }
         }
@@ -4319,5 +4402,87 @@ mod tests {
     #[test]
     fn test_telex_normal() {
         telex(TELEX_NORMAL);
+    }
+
+    // =========================================================================
+    // AUTO-RESTORE TESTS
+    // Test space-triggered auto-restore for all Telex modifiers (s/f/r/x/j)
+    // When user types double modifier to revert, then continues typing,
+    // pressing space should restore to the buffer form (with revert applied)
+    // =========================================================================
+
+    // =========================================================================
+    // AUTO-RESTORE TESTS for double modifier patterns
+    //
+    // Generic check handles: double 'r', 'x', 'j' with EXACTLY 2 chars after
+    // Double 's' is handled by existing specific check (5 chars raw, 4 chars buf)
+    // Double 'f' has too many legitimate English words (effect, different, etc.)
+    //
+    // Constraint: suffix after double must be exactly 2 chars (V+C pattern)
+    // This avoids false positives like "current" (suffix "ent" = 3 chars)
+    // =========================================================================
+
+    // Auto-restore with double 'r' (hỏi mark)
+    // Pattern: double 'r' + exactly 2 chars (V+C)
+    const TELEX_AUTO_RESTORE_R: &[(&str, &str)] = &[
+        ("sarrah ", "sarah "), // s-a-rr-a-h: suffix "ah" = 2 chars ✓
+        ("barrut ", "barut "), // b-a-rr-u-t: suffix "ut" = 2 chars ✓
+        ("tarrep ", "tarep "), // t-a-rr-e-p: suffix "ep" = 2 chars ✓
+    ];
+
+    // Auto-restore with double 'x' (ngã mark)
+    // Pattern: double 'x' + exactly 2 chars
+    const TELEX_AUTO_RESTORE_X: &[(&str, &str)] = &[
+        ("maxxat ", "maxat "), // m-a-xx-a-t: suffix "at" = 2 chars ✓
+        ("texxup ", "texup "), // t-e-xx-u-p: suffix "up" = 2 chars ✓
+    ];
+
+    // Auto-restore with double 'j' (nặng mark)
+    // Pattern: double 'j' + exactly 2 chars
+    const TELEX_AUTO_RESTORE_J: &[(&str, &str)] = &[
+        ("majjam ", "majam "), // m-a-jj-a-m: suffix "am" = 2 chars ✓
+        ("bajjut ", "bajut "), // b-a-jj-u-t: suffix "ut" = 2 chars ✓
+    ];
+
+    #[test]
+    fn test_auto_restore_double_r() {
+        for (input, expected) in TELEX_AUTO_RESTORE_R {
+            let mut e = Engine::new();
+            e.set_english_auto_restore(true);
+            let result = type_word(&mut e, input);
+            assert_eq!(
+                result, *expected,
+                "[Auto-restore R] '{}' → '{}', expected '{}'",
+                input, result, expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_auto_restore_double_x() {
+        for (input, expected) in TELEX_AUTO_RESTORE_X {
+            let mut e = Engine::new();
+            e.set_english_auto_restore(true);
+            let result = type_word(&mut e, input);
+            assert_eq!(
+                result, *expected,
+                "[Auto-restore X] '{}' → '{}', expected '{}'",
+                input, result, expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_auto_restore_double_j() {
+        for (input, expected) in TELEX_AUTO_RESTORE_J {
+            let mut e = Engine::new();
+            e.set_english_auto_restore(true);
+            let result = type_word(&mut e, input);
+            assert_eq!(
+                result, *expected,
+                "[Auto-restore J] '{}' → '{}', expected '{}'",
+                input, result, expected
+            );
+        }
     }
 }
