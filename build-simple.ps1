@@ -1,7 +1,7 @@
 # Simple Build Script
 param([string]$Configuration = "Debug")
 
-Write-Host "Building GoNhanh..." -ForegroundColor Cyan
+Write-Host "Building FKey..." -ForegroundColor Cyan
 
 Push-Location "platforms/windows/GoNhanh"
 

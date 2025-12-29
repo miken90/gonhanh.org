@@ -1,13 +1,13 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Build and package GoNhanh portable release for Windows
+    Build and package FKey portable release for Windows
 .DESCRIPTION
     Builds self-contained portable executable and creates ZIP package for release
 .PARAMETER Version
-    Version number (e.g., "1.5.9")
+    Version number (e.g., "1.6.0")
 .EXAMPLE
-    .\build-release.ps1 -Version "1.5.9"
+    .\build-release.ps1 -Version "1.6.0"
 #>
 
 param(
@@ -21,17 +21,17 @@ $ErrorActionPreference = "Stop"
 $ProjectPath = Join-Path $PSScriptRoot "GoNhanh"
 $ProjectFile = Join-Path $ProjectPath "GoNhanh.csproj"
 $OutputDir = Join-Path $ProjectPath "bin\Release\net8.0-windows\win-x64\publish"
-$ZipName = "GoNhanh-v$Version-portable.zip"
+$ZipName = "FKey-v$Version-portable.zip"
 $ZipPath = Join-Path $OutputDir $ZipName
 
 Write-Host "════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host " GoNhanh Release Builder v$Version" -ForegroundColor Cyan
+Write-Host " FKey Release Builder v$Version" -ForegroundColor Cyan
 Write-Host "════════════════════════════════════════" -ForegroundColor Cyan
 Write-Host ""
 
 # Step 1: Kill running instances
-Write-Host "[1/4] Stopping GoNhanh processes..." -ForegroundColor Yellow
-Get-Process -Name "GoNhanh" -ErrorAction SilentlyContinue | Stop-Process -Force
+Write-Host "[1/4] Stopping FKey processes..." -ForegroundColor Yellow
+Get-Process -Name "FKey" -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 1
 Write-Host "[OK] Processes stopped" -ForegroundColor Green
 Write-Host ""
@@ -72,9 +72,9 @@ Write-Host ""
 # Step 4: Create ZIP package
 Write-Host "[4/4] Creating ZIP package..." -ForegroundColor Yellow
 
-$ExePath = Join-Path $OutputDir "GoNhanh.exe"
+$ExePath = Join-Path $OutputDir "FKey.exe"
 if (-not (Test-Path $ExePath)) {
-    Write-Host "[ERROR] GoNhanh.exe not found at: $ExePath" -ForegroundColor Red
+    Write-Host "[ERROR] FKey.exe not found at: $ExePath" -ForegroundColor Red
     exit 1
 }
 
