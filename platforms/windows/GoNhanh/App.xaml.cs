@@ -158,6 +158,35 @@ public partial class App : System.Windows.Application
         });
     }
 
+    /// <summary>
+    /// Enable/disable global hotkey (used when recording new hotkey)
+    /// </summary>
+    public void SetHotkeyEnabled(bool enabled)
+    {
+        if (_keyboardHook != null)
+        {
+            _keyboardHook.HotkeyEnabled = enabled;
+        }
+    }
+
+    /// <summary>
+    /// Enable/disable entire keyboard hook (used when recording new hotkey in settings)
+    /// </summary>
+    public void SetKeyboardHookEnabled(bool enabled)
+    {
+        if (_keyboardHook != null)
+        {
+            if (enabled)
+            {
+                _keyboardHook.Start();
+            }
+            else
+            {
+                _keyboardHook.Stop();
+            }
+        }
+    }
+
     private void ShowAdvancedSettings()
     {
         var advancedWindow = new AdvancedSettingsWindow(_settings, _shortcuts);

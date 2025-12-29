@@ -89,6 +89,11 @@ public class KeyboardHook : IDisposable
     /// </summary>
     public KeyboardShortcut? Hotkey { get; set; }
 
+    /// <summary>
+    /// Enable/disable hotkey detection (used when recording new hotkey)
+    /// </summary>
+    public bool HotkeyEnabled { get; set; } = true;
+
     #endregion
 
     #region Public Methods
@@ -165,7 +170,7 @@ public class KeyboardHook : IDisposable
             bool ctrl = IsKeyDown(KeyCodes.VK_CONTROL);
             bool alt = IsKeyDown(KeyCodes.VK_MENU);
 
-            if (Hotkey != null && Hotkey.Matches(keyCode, ctrl, alt, shift))
+            if (HotkeyEnabled && Hotkey != null && Hotkey.Matches(keyCode, ctrl, alt, shift))
             {
                 OnHotkeyTriggered?.Invoke();
                 return (IntPtr)1; // Consume the key

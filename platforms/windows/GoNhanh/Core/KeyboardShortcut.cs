@@ -31,6 +31,20 @@ public class KeyboardShortcut
     };
 
     /// <summary>
+    /// Empty shortcut (no hotkey assigned)
+    /// </summary>
+    public static KeyboardShortcut Empty => new()
+    {
+        KeyCode = 0,
+        Modifiers = 0
+    };
+
+    /// <summary>
+    /// Check if shortcut is empty/unassigned
+    /// </summary>
+    public bool IsEmpty => KeyCode == 0 && Modifiers == 0;
+
+    /// <summary>
     /// Check if key press matches this shortcut
     /// </summary>
     public bool Matches(ushort keyCode, bool ctrl, bool alt, bool shift)

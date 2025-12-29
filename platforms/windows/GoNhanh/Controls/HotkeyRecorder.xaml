@@ -23,15 +23,6 @@
                         Orientation="Horizontal"
                         VerticalAlignment="Center"/>
 
-            <!-- Recording state text -->
-            <TextBlock x:Name="RecordingText"
-                       Grid.Column="0"
-                       Text="Nhấn phím tắt..."
-                       Foreground="#9CA3AF"
-                       FontStyle="Italic"
-                       VerticalAlignment="Center"
-                       Visibility="Collapsed"/>
-
             <!-- Clear button -->
             <Button x:Name="ClearButton"
                     Grid.Column="1"
@@ -44,6 +35,7 @@
                     Cursor="Hand"
                     VerticalAlignment="Center"
                     Click="ClearButton_Click"
+                    PreviewMouseDown="ClearButton_PreviewMouseDown"
                     ToolTip="Xóa phím tắt"/>
         </Grid>
     </Border>

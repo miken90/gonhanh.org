@@ -69,8 +69,9 @@ public partial class AdvancedSettingsWindow : Window
         _settings.AutoCapitalize = AutoCapitalizeCheckBox.IsChecked ?? true;
         _settings.AutoStart = AutoStartCheckBox.IsChecked ?? false;
 
-        // Save toggle hotkey
-        _settings.ToggleHotkey = HotkeyRecorderControl.Shortcut;
+        // Save toggle hotkey (reset to default if empty)
+        var hotkey = HotkeyRecorderControl.Shortcut;
+        _settings.ToggleHotkey = hotkey.IsEmpty ? KeyboardShortcut.Default : hotkey;
 
         _settings.Save();
     }

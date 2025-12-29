@@ -3,18 +3,17 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using GoNhanh.Core;
+using GoNhanh.Views;
 using WpfColor = System.Windows.Media.Color;
-using WpfMessageBox = System.Windows.MessageBox;
 
 namespace GoNhanh.Controls;
 
 /// <summary>
 /// UserControl for recording keyboard shortcuts
-/// Matches macOS ShortcutRecorderRow pattern
+/// Opens dialog for clear UX
 /// </summary>
 public partial class HotkeyRecorder : System.Windows.Controls.UserControl
 {
-    private bool _isRecording;
     private KeyboardShortcut _shortcut = KeyboardShortcut.Default;
 
     /// <summary>
@@ -43,111 +42,57 @@ public partial class HotkeyRecorder : System.Windows.Controls.UserControl
 
     private void Border_MouseDown(object sender, MouseButtonEventArgs e)
     {
-        StartRecording();
-    }
-
-    private void StartRecording()
-    {
-        _isRecording = true;
-        MainBorder.BorderBrush = new SolidColorBrush(WpfColor.FromRgb(37, 99, 235)); // Primary blue
-        KeysPanel.Visibility = Visibility.Collapsed;
-        RecordingText.Visibility = Visibility.Visible;
-        Focus();
-    }
-
-    private void StopRecording()
-    {
-        _isRecording = false;
-        MainBorder.BorderBrush = new SolidColorBrush(WpfColor.FromRgb(229, 231, 235)); // #E5E7EB
-        KeysPanel.Visibility = Visibility.Visible;
-        RecordingText.Visibility = Visibility.Collapsed;
-    }
-
-    protected override void OnKeyDown(System.Windows.Input.KeyEventArgs e)
-    {
-        if (!_isRecording) return;
-
-        // Ignore modifier-only keys
-        if (e.Key == Key.LeftCtrl || e.Key == Key.RightCtrl ||
-            e.Key == Key.LeftAlt || e.Key == Key.RightAlt ||
-            e.Key == Key.LeftShift || e.Key == Key.RightShift ||
-            e.Key == Key.System)
+        // Ignore if click originated from ClearButton
+        var source = e.OriginalSource as DependencyObject;
+        while (source != null && source != this)
         {
-            return;
+            if (source == ClearButton) return;
+            source = VisualTreeHelper.GetParent(source);
         }
 
-        // Get modifiers
-        bool ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
-        bool alt = Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
-        bool shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+        // Open dialog to record new hotkey
+        var dialog = new HotkeyDialog();
+        dialog.Owner = Window.GetWindow(this);
 
-        // Require at least one modifier
-        if (!ctrl && !alt && !shift)
+        if (dialog.ShowDialog() == true && dialog.RecordedShortcut != null)
         {
-            // ESC cancels recording
-            if (e.Key == Key.Escape)
-            {
-                StopRecording();
-                e.Handled = true;
-                return;
-            }
-            return;
+            _shortcut = dialog.RecordedShortcut;
+            UpdateDisplay();
+            ShortcutChanged?.Invoke(this, _shortcut);
         }
+    }
 
-        // Get virtual key code
-        int vk = KeyInterop.VirtualKeyFromKey(e.Key == Key.System ? e.SystemKey : e.Key);
-
-        // Validate - block system shortcuts
-        if (IsSystemShortcut(ctrl, alt, shift, vk))
-        {
-            WpfMessageBox.Show(
-                "Phím tắt này đã được hệ thống sử dụng.",
-                "Không thể sử dụng",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            e.Handled = true;
-            return;
-        }
-
-        // Build modifiers byte
-        byte modifiers = 0;
-        if (ctrl) modifiers |= KeyboardShortcut.MOD_CTRL;
-        if (alt) modifiers |= KeyboardShortcut.MOD_ALT;
-        if (shift) modifiers |= KeyboardShortcut.MOD_SHIFT;
-
-        // Create new shortcut
-        _shortcut = new KeyboardShortcut
-        {
-            KeyCode = (ushort)vk,
-            Modifiers = modifiers
-        };
-
-        StopRecording();
+    private void ClearButton_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        // Clear shortcut
+        _shortcut = KeyboardShortcut.Empty;
         UpdateDisplay();
         ShortcutChanged?.Invoke(this, _shortcut);
-
         e.Handled = true;
-    }
-
-    protected override void OnLostFocus(RoutedEventArgs e)
-    {
-        base.OnLostFocus(e);
-        if (_isRecording)
-        {
-            StopRecording();
-        }
     }
 
     private void ClearButton_Click(object sender, RoutedEventArgs e)
     {
-        _shortcut = KeyboardShortcut.Default;
-        UpdateDisplay();
-        ShortcutChanged?.Invoke(this, _shortcut);
+        e.Handled = true;
     }
 
     private void UpdateDisplay()
     {
         KeysPanel.Children.Clear();
+
+        // Show placeholder if empty
+        if (_shortcut.IsEmpty)
+        {
+            KeysPanel.Children.Add(new TextBlock
+            {
+                Text = "Nhấp để đặt phím tắt...",
+                Foreground = new SolidColorBrush(WpfColor.FromRgb(156, 163, 175)), // #9CA3AF
+                FontStyle = FontStyles.Italic,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            return;
+        }
+
         var parts = _shortcut.GetDisplayParts();
 
         for (int i = 0; i < parts.Length; i++)
@@ -182,25 +127,5 @@ public partial class HotkeyRecorder : System.Windows.Controls.UserControl
 
             KeysPanel.Children.Add(keycap);
         }
-    }
-
-    /// <summary>
-    /// Check if shortcut conflicts with common system shortcuts
-    /// </summary>
-    private static bool IsSystemShortcut(bool ctrl, bool alt, bool shift, int vk)
-    {
-        // Block Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A, Ctrl+Z, Ctrl+Y
-        if (ctrl && !alt && !shift)
-        {
-            return vk is 0x43 or 0x56 or 0x58 or 0x41 or 0x5A or 0x59; // C, V, X, A, Z, Y
-        }
-
-        // Block Alt+Tab, Alt+F4
-        if (alt && !ctrl && !shift)
-        {
-            return vk is 0x09 or 0x73; // Tab, F4
-        }
-
-        return false;
     }
 }
