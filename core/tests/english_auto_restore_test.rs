@@ -72,10 +72,16 @@ fn pattern1_modifier_then_consonant() {
         ("exclude ", "exclude "),
         ("excuse ", "excuse "),
         ("execute ", "execute "),
-        // NOTE: s + consonant patterns like "test", "rest", "best" form valid Vietnamese words
-        // (tét, rét, bét, etc.) so they are NOT auto-restored.
-        // Users who want English spelling should use ESC or raw mode prefix.
-        // This is a design decision: preserve Vietnamese words over restoring English.
+        // r + consonant (hỏi modifier followed by consonant)
+        ("perfect ", "perfect "),
+        ("hard ", "hard "),
+        ("support ", "support "),
+        // s + consonant: only longer words or invalid VN structure get restored
+        // Short words like "test", "rest" form valid Vietnamese (tét, rét)
+        ("tesla ", "tesla "),
+        ("push ", "push "),
+        // x + u patterns (ngã before vowel, then consonant)
+        ("luxury ", "luxury "),
     ]);
 }
 
@@ -152,7 +158,10 @@ fn pattern5_w_start_consonant() {
         ("water ", "water "),
         ("winter ", "winter "),
         ("window ", "window "),
+        ("with ", "with "),
         ("wonder ", "wonder "),
+        ("wonderful ", "wonderful "),
+        ("work ", "work "),
         ("worker ", "worker "),
         ("world ", "world "),
         ("worth ", "worth "),
@@ -235,6 +244,7 @@ fn pattern6_invalid_initial_f() {
         ("fast ", "fast "),
         ("fat ", "fat "),
         ("fear ", "fear "),
+        ("feature ", "feature "),
         ("feed ", "feed "),
         ("feel ", "feel "),
         ("few ", "few "),
@@ -448,6 +458,7 @@ fn pattern7_vowel_modifier_vowel_with_initial() {
         ("wore ", "wore "), // W initial also triggers Pattern 5
         ("store ", "store "),
         ("score ", "score "),
+        ("life ", "life "), // l + i + f + e → lìe (invalid) → restore
         // Short words: consonant + vowel + modifier (no final vowel)
         ("per ", "per "),    // p + e + r → pẻ (invalid) → restore "per"
         ("thiss ", "this "), // t + h + i + s + s → double s reverts → buffer "this" (4 chars)
@@ -647,6 +658,12 @@ fn pattern9_double_mark_no_prefix() {
         ("marry ", "marry "),
         ("sorry ", "sorry "),
         ("worry ", "worry "),
+        // -ified suffix pattern
+        ("verified ", "verified "),  // normal typing
+        ("verrified ", "verified "), // double 'r' reverts mark
+        // -ect suffix pattern (s applies sắc mark to e)
+        ("respect ", "respect "),
+        ("respect  ", "respect  "),
     ]);
 }
 

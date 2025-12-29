@@ -2483,8 +2483,7 @@ impl Engine {
                     self.had_any_transform = true;
                 }
 
-                // Track in raw_input for auto-restore detection
-                self.raw_input.push((key, caps, false));
+                // Note: raw_input already has the key (pushed at on_key_ext before process)
 
                 // Rebuild from vowel position (second vowel is NOT added to buffer - it's modifier)
                 // Screen has: "xép" (3 chars), buffer stays: "xếp" (3 chars, vowel updated)
@@ -3332,7 +3331,8 @@ impl Engine {
 
         // Common English suffixes
         const SUFFIXES: &[&str] = &[
-            "able", "ible", "tion", "sion", "ment", "ness", "less", "ful", "ing", "ive",
+            "able", "ible", "tion", "sion", "ment", "ness", "less", "ful", "ing", "ive", "ified",
+            "ous", "ory",
         ];
 
         // Short suffixes for common words (need minimum buffer length check)
@@ -4320,6 +4320,7 @@ mod tests {
         ("dd", "đ"),
         // Mark after consonant
         ("tex", "tẽ"), // t + e + x(ngã) → tẽ
+        ("ver", "vẻ"), // v + e + r(hỏi) → vẻ (test for #issue)
     ];
 
     const VNI_BASIC: &[(&str, &str)] = &[
