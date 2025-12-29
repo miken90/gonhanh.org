@@ -35,7 +35,7 @@
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
 
-    <!-- SAFE: No trimming for WPF stability -->
+    <!-- SAFE: No trimming - WPF/WinForms not compatible with IL trimming -->
     <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
 

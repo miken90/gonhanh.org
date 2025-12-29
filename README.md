@@ -43,7 +43,7 @@
 - 🔤 **Auto-restore tiếng Anh** — Gõ `text` `expect` `user` `push` `sort` → tự khôi phục khi nhấn space
 - ⎋ **Gõ ESC tự khôi phục** — Gõ `user` → `úẻ` → nhấn **ESC** → `user`
 - 🔠 **Tự viết hoa đầu câu** — Gõ `ok.` Space `b` → `B` hoa
-- ⚡ **Siêu nhanh** — <1ms latency · ~5MB RAM
+- ⚡ **Siêu nhanh** — <1ms latency · ~10MB RAM
 
 ### 📋 Đầy đủ
 

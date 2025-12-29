@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using GoNhanh.Core;
 
@@ -12,6 +13,10 @@ namespace GoNhanh.Views;
 /// </summary>
 public class TrayIcon : IDisposable
 {
+    // Win32 import for proper HICON cleanup
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool DestroyIcon(IntPtr hIcon);
+
     private NotifyIcon? _notifyIcon;
     private ContextMenuStrip? _contextMenu;
     private ToolStripMenuItem? _headerItem;
@@ -20,6 +25,10 @@ public class TrayIcon : IDisposable
     private bool _isEnabled = true;
     private InputMethod _currentMethod = InputMethod.Telex;
     private bool _disposed;
+
+    // Cache icons to avoid recreating them
+    private Icon? _enabledIcon;
+    private Icon? _disabledIcon;
 
     #region Events
 
@@ -157,9 +166,17 @@ public class TrayIcon : IDisposable
 
         try
         {
-            // Create icon matching macOS style:
-            // White rounded rect background with "V" or "E" text
-            _notifyIcon.Icon = CreateStatusIcon(isEnabled ? "V" : "E", isEnabled);
+            // Use cached icons to avoid memory leak from repeated icon creation
+            if (isEnabled)
+            {
+                _enabledIcon ??= CreateStatusIcon("V", true);
+                _notifyIcon.Icon = _enabledIcon;
+            }
+            else
+            {
+                _disabledIcon ??= CreateStatusIcon("E", false);
+                _notifyIcon.Icon = _disabledIcon;
+            }
         }
         catch
         {
@@ -212,10 +229,18 @@ public class TrayIcon : IDisposable
             g.DrawString(text, font, brush, x, y);
         }
 
-        // Clone icon to own it, then dispose temp resources
+        // Create icon and properly destroy native HICON handle
         var hIcon = bitmap.GetHicon();
-        using var tempIcon = Icon.FromHandle(hIcon);
-        return (Icon)tempIcon.Clone();
+        try
+        {
+            using var tempIcon = Icon.FromHandle(hIcon);
+            return (Icon)tempIcon.Clone();
+        }
+        finally
+        {
+            // Critical: destroy native HICON to prevent memory leak
+            DestroyIcon(hIcon);
+        }
     }
 
     private static GraphicsPath CreateRoundedRectPath(Rectangle rect, int radius)
@@ -270,6 +295,8 @@ public class TrayIcon : IDisposable
             {
                 _notifyIcon?.Dispose();
                 _contextMenu?.Dispose();
+                _enabledIcon?.Dispose();
+                _disabledIcon?.Dispose();
             }
             _disposed = true;
         }
