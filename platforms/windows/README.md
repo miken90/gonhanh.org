@@ -45,6 +45,20 @@ dotnet build -c Release
 
 Or open `platforms/windows/GoNhanh/GoNhanh.csproj` in Visual Studio.
 
+## Building Release
+
+Create portable release package:
+
+```powershell
+# PowerShell
+.\build-release.ps1 -Version "1.5.9"
+
+# Bash (Git Bash, WSL)
+./build-release.sh 1.5.9
+```
+
+Output: `GoNhanh/bin/Release/net8.0-windows/win-x64/publish/GoNhanh-v{version}-portable.zip`
+
 ## Project Structure
 
 ```
