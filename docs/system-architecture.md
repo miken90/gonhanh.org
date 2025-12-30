@@ -1,35 +1,37 @@
-# Gõ Nhanh: System Architecture
+# FKey: System Architecture
+
+> **Note**: FKey v1.6.0 - Windows-only Vietnamese keyboard input
 
 ## High-Level Architecture
 
 ```
-┌──────────────────────────────────────────┐   ┌──────────────────────────────────────────┐
-│         macOS Application                │   │      Windows Application                 │
-│                                          │   │                                          │
-│  ┌────────────────────────────────┐     │   │  ┌────────────────────────────────┐     │
-│  │     SwiftUI Menu Bar           │     │   │  │   WPF System Tray UI           │     │
-│  │  • Input method selector       │     │   │  │  • Input method selector       │     │
-│  │  • Enable/disable toggle       │     │   │  │  • Enable/disable toggle       │     │
-│  │  • Settings, About, Update     │     │   │  │  • Settings, About, Update     │     │
-│  └────────────┬────────────────────┘     │   │  └────────────┬────────────────────┘     │
-│               │                          │   │               │                          │
-│  ┌────────────▼────────────────────┐     │   │  ┌────────────▼────────────────────┐     │
-│  │ CGEventTap Keyboard Hook        │     │   │  │ SetWindowsHookEx Keyboard Hook  │     │
-│  │ • Intercepts keyDown events     │     │   │  │ • Intercepts WH_KEYBOARD_LL     │     │
-│  │ • Smart text replacement        │     │   │  │ • SendInput for text            │     │
-│  └────────────┬────────────────────┘     │   │  └────────────┬────────────────────┘     │
-│               │                          │   │               │                          │
-│  ┌────────────▼────────────────────┐     │   │  ┌────────────▼────────────────────┐     │
-│  │    RustBridge (FFI Layer)       │     │   │  │   RustBridge.cs (P/Invoke)     │     │
-│  │  • C ABI function calls         │     │   │  │  • P/Invoke DLL function calls  │     │
-│  │  • Pointer safety handling      │     │   │  │  • UTF-32 interop               │     │
-│  └────────────┬────────────────────┘     │   │  └────────────┬────────────────────┘     │
-└───────────────┼──────────────────────────┘   └───────────────┼──────────────────────────┘
-                │                                               │
-                └───────────────────┬──────────────────────────┘
-                                    │
-                         extern "C" / P/Invoke
-                                    ↓
+┌──────────────────────────────────────────┐
+│      Windows Application (WPF/.NET 8)    │
+│                                          │
+│  ┌────────────────────────────────┐     │
+│  │   WPF System Tray UI            │     │
+│  │  • Input method selector        │     │
+│  │  • Enable/disable toggle        │     │
+│  │  • Settings, About, Update      │     │
+│  └────────────┬────────────────────┘     │
+│               │                          │
+│  ┌────────────▼────────────────────┐     │
+│  │ SetWindowsHookEx Keyboard Hook  │     │
+│  │ • Intercepts WH_KEYBOARD_LL     │     │
+│  │ • SendInput for text            │     │
+│  │ • Global hotkey detection       │     │
+│  └────────────┬────────────────────┘     │
+│               │                          │
+│  ┌────────────▼────────────────────┐     │
+│  │   RustBridge.cs (P/Invoke)      │     │
+│  │  • P/Invoke DLL function calls  │     │
+│  │  • UTF-32 interop               │     │
+│  │  • 11 FFI methods               │     │
+│  └────────────┬────────────────────┘     │
+└───────────────┼──────────────────────────┘
+                │
+           P/Invoke
+                ↓
          ┌─────────────────────────────────────────────┐
          │     Rust Core Engine (Platform-Agnostic)   │
          │     7-Stage Validation-First Pipeline       │
@@ -87,20 +89,20 @@
 User types: [a] then [s]
 
 Step 1: Key 'a' pressed
-  ├─ CGEventTap captures keyDown
-  ├─ RustBridge.processKey(keyCode=0x00, caps=false, ctrl=false)
+  ├─ KeyboardHook captures WM_KEYDOWN
+  ├─ RustBridge.ProcessKey(vkCode=0x41, caps=false, shift=false)
   ├─ Rust: ime_key() called
   ├─ Engine:
   │  ├─ Append 'a' to buffer
   │  ├─ Validate: "a" is valid (vowel alone)
   │  ├─ No transform yet (single char, waiting for next)
   │  └─ Return Action::None (pass through)
-  ├─ Swift: No action, let 'a' appear naturally
+  ├─ C#: No action, let 'a' appear naturally
   └─ Output: User sees 'a' typed
 
 Step 2: Key 's' pressed (sắc mark in Telex)
-  ├─ CGEventTap captures keyDown
-  ├─ RustBridge.processKey(keyCode=0x01, caps=false, ctrl=false)
+  ├─ KeyboardHook captures WM_KEYDOWN
+  ├─ RustBridge.ProcessKey(vkCode=0x53, caps=false, shift=false)
   ├─ Rust: ime_key() called
   ├─ Engine:
   │  ├─ Check buffer context: "a" + "s" → sắc mark
@@ -111,9 +113,10 @@ Step 2: Key 's' pressed (sắc mark in Telex)
   │  │    backspace: 1,  // Delete 'a'
   │  │    chars: ['á']   // Insert 'á'
   │  └─ }
-  ├─ Swift:
+  ├─ C#:
+  │  ├─ TextSender.SendText("á", 1)
   │  ├─ Send 1 backspace (delete 'a')
-  │  ├─ Send 'á' (via Unicode keyboard event)
+  │  ├─ Send 'á' (via SendInput + KEYEVENTF_UNICODE)
   │  └─ 's' keystroke consumed (not passed through)
   └─ Output: User sees 'á' (exactly 1 character)
 
@@ -124,7 +127,7 @@ Latency: ~0.2-0.5ms total (Rust engine: <0.1ms)
 ### Example: Typing "không" with Shortcut
 
 ```
-User types: [k] [h] [o] [n] [g] [space]  (or defined shortcut key)
+User types: [k] [h] [o] [n] [g] [space]
 
 Setup: User defined shortcut "khong" → "không"
 
@@ -135,7 +138,7 @@ Processing:
     ├─ Match found: "khong" → "không"
     └─ Return: backspace: 5, chars: ['k','h','ô','n','g']
 
-  Swift execution:
+  TextSender execution:
     ├─ Delete 5 chars (k, h, o, n, g)
     ├─ Insert 5 chars (k, h, ô, n, g)
     └─ No change visible but ô is now correct diacritic
@@ -184,297 +187,26 @@ void ime_free(ImeResult* result);
 ### Memory Ownership
 
 - **FFI Responsibility**: Rust engine allocates Result struct
-- **Caller Responsibility**: Swift must call `ime_free(result)` to deallocate
-- **Safety**: Use `defer { ime_free(ptr) }` to guarantee cleanup even on early return
+- **Caller Responsibility**: C# must call `ime_free(result)` to deallocate
+- **Safety**: Use try/finally to guarantee cleanup even on exceptions
 
-## Platform Integration Details
+## Windows Platform Integration
 
-### macOS CGEventTap
+### SetWindowsHookEx Keyboard Hook
 
-#### Event Interception
-```swift
-// Tap into keyboard events system-wide
-let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
-
-let tap = CGEvent.tapCreate(
-    tap: .cghidEventTap,                    // Try HID event tap first
-    place: .headInsertEventTap,             // Insert at head of chain
-    options: .defaultTap,                   // Can modify/drop events
-    eventsOfInterest: eventMask,            // Only keyDown
-    callback: keyboardCallback,             // Our handler
-    userInfo: nil
-)
+```csharp
+// System-wide low-level keyboard hook
+_hookId = SetWindowsHookEx(
+    WH_KEYBOARD_LL,           // Low-level keyboard hook
+    HookCallback,             // Our handler
+    IntPtr.Zero,              // Use current module
+    0                         // All threads (system-wide)
+);
 ```
 
-#### Fallback Strategy
-```
-1st attempt: CGEventTapType.cghidEventTap
-   └─ If fails → 2nd attempt: cgSessionEventTap
-      └─ If fails → 3rd attempt: cgAnnotatedSessionEventTap
-         └─ If all fail → Accessibility permission required
-```
+### Text Injection via SendInput
 
-#### Text Replacement Methods
-
-**Method 1: Backspace (default)**
-```
-Send: BS BS ... BS (backspace count times)
-      ↓ (0.8ms delay)
-Send: Unicode input event with output chars
-```
-
-**Method 2: Selection (autocomplete apps)**
-```
-Send: Shift+Left Shift+Left ... Shift+Left (select chars)
-      ↓
-Send: Unicode input event (replaces selection)
-```
-
-#### Engine Result Cases
-
-| Case | Action | Backspace | Output | Example (Telex) | Example (VNI) |
-|------|--------|-----------|--------|-----------------|---------------|
-| **Pass-through** | None | 0 | - | Normal letters, ctrl+key | Normal letters, ctrl+key |
-| **Mark (dấu thanh)** | Send | 1 | vowel+mark | `as` → `á` | `a1` → `á` |
-| **Tone (dấu mũ/móc)** | Send | 1+ | vowel+tone | `aa` → `â`, `ow` → `ơ` | `a6` → `â`, `o7` → `ơ` |
-| **Stroke (đ)** | Send | 1+ | đ | `dd` → `đ` | `d9` → `đ` |
-| **Compound ươ** | Send | 2 | ươ | `uow` → `ươ` | `u7o7` → `ươ` |
-| **Mark reposition** | Send | 2+ | repositioned | `hoaf` → `hoà` | `hoa2` → `hoà` |
-| **Revert (double key)** | Send | 1+ | original+key | `ass` → `as` | `a11` → `a1` |
-| **Word shortcut** | Send | N | expanded | `vn ` → `Việt Nam ` | same |
-| **W as ư (Telex)** | Send | 0 | ư | `w` → `ư`, `nhw` → `như` | N/A |
-
-#### Text Replacement Strategy Matrix
-
-| Backspace Count | Method | Reason | UX Impact |
-|-----------------|--------|--------|-----------|
-| **0** | None | No replacement needed (W→ư adds char) | ✅ Best - instant |
-| **1** | Backspace | Single char, fast, no flicker | ✅ Good - imperceptible |
-| **2-3** | Backspace | Compound vowels, still fast | ⚡ OK - minimal delay |
-| **4+** | Backspace | Long shortcuts | ⚠️ May see brief flicker |
-
-#### App Compatibility Matrix
-
-**Legend:** ✅ OK | ⚠️ Sometimes issues | ❌ Known issues
-
-##### Browsers
-
-| App | Bundle ID | Body Text | Address Bar | Search Box |
-|-----|-----------|-----------|-------------|------------|
-| Chrome | `com.google.Chrome` | ✅ Backspace | ❌ Selection | ⚠️ Selection |
-| Safari | `com.apple.Safari` | ✅ Backspace | ❌ Selection | ⚠️ Selection |
-| Firefox | `org.mozilla.firefox` | ✅ Backspace | ❌ Selection | ⚠️ Selection |
-| Edge | `com.microsoft.edgemac` | ✅ Backspace | ❌ Selection | ⚠️ Selection |
-| Arc | `company.thebrowser.Browser` | ✅ Backspace | ❌ Selection | ⚠️ Selection |
-
-##### Office & Productivity
-
-| App | Bundle ID | Issue | Method |
-|-----|-----------|-------|--------|
-| Excel | `com.microsoft.Excel` | Cell autocomplete | Selection |
-| Word | `com.microsoft.Word` | Suggestion popup | Selection |
-| PowerPoint | `com.microsoft.Powerpoint` | Text box | Selection |
-| Pages | `com.apple.iWork.Pages` | None (native) | Backspace |
-| Numbers | `com.apple.iWork.Numbers` | None (native) | Backspace |
-| Google Docs | (web) | Canvas-based | Backspace |
-
-##### IDEs & Editors
-
-| App | Bundle ID | Issue | Method |
-|-----|-----------|-------|--------|
-| VS Code | `com.microsoft.VSCode` | None | Backspace |
-| Xcode | `com.apple.dt.Xcode` | None (native) | Backspace |
-| Android Studio | `com.google.android.studio` | Autocomplete popup | Selection |
-| IntelliJ | `com.jetbrains.intellij` | Autocomplete | Selection |
-| WebStorm | `com.jetbrains.WebStorm` | Autocomplete | Selection |
-| Sublime Text | `com.sublimetext.*` | None | Backspace |
-
-##### Electron Apps
-
-| App | Bundle ID | Issue | Method |
-|-----|-----------|-------|--------|
-| Slack | `com.tinyspeck.slackmacgap` | Sometimes lost char | Backspace |
-| Discord | `com.hnc.Discord` | Electron IME bugs | Backspace |
-| Notion | `notion.id` | Sometimes sticky | Backspace |
-| Obsidian | `md.obsidian` | None | Backspace |
-| Figma | `com.figma.Desktop` | Canvas text | Backspace |
-
-##### Terminal & Chat
-
-| App | Bundle ID | Issue | Method |
-|-----|-----------|-------|--------|
-| Terminal | `com.apple.Terminal` | None (native) | Backspace |
-| iTerm2 | `com.googlecode.iterm2` | None | Backspace |
-| Messages | `com.apple.MobileSMS` | None (native) | Backspace |
-| Telegram | `ru.keepcoder.Telegram` | None (native) | Backspace |
-| Zalo | `com.vng.zalo` | None | Backspace |
-
-#### Detection Strategy
-
-Instead of app-based detection, use **Accessibility API** to detect focused element type:
-
-| AX Role | AX Subrole | Context | Method |
-|---------|------------|---------|--------|
-| `AXComboBox` | - | Address bar, dropdown | Selection |
-| `AXTextField` | `AXSearchField` | Search with autocomplete | Selection |
-| `AXTextField` | - | Form input | Backspace |
-| `AXTextArea` | - | Multiline text | Backspace |
-| `AXWebArea` | - | Web content editable | Backspace |
-
-**Priority rules:**
-1. `AXComboBox` → Always Selection (address bars, dropdowns)
-2. `AXSearchField` subrole → Selection (search boxes)
-3. JetBrains apps (`com.jetbrains.*`) → Selection (autocomplete)
-4. Microsoft Excel → Selection (cell autocomplete)
-5. **Everything else** → Backspace (default, ~90% of cases)
-
-#### Current Implementation
-
-```swift
-// Accessibility-based detection (preferred)
-func getReplacementMethod() -> ReplacementMethod {
-    // Get focused element info
-    guard let info = getFocusedElementInfo() else {
-        return .backspace // Default
-    }
-
-    // Rule 1: ComboBox = address bar, dropdown
-    if info.role == "AXComboBox" {
-        return .selection
-    }
-
-    // Rule 2: Search field with autocomplete
-    if info.role == "AXTextField" && info.subrole == "AXSearchField" {
-        return .selection
-    }
-
-    // Rule 3: JetBrains IDEs
-    if info.bundleId.hasPrefix("com.jetbrains") {
-        return .selection
-    }
-
-    // Rule 4: Microsoft Excel
-    if info.bundleId == "com.microsoft.Excel" {
-        return .selection
-    }
-
-    // Default: Backspace (fast, no flicker)
-    return .backspace
-}
-```
-
-#### Known Issues & Trade-offs
-
-| Issue | Cause | Solution | Status |
-|-------|-------|----------|--------|
-| **Dính chữ (address bar)** | Autocomplete intercepts backspace | AX detection → Selection | ✅ Fixed |
-| **Flicker (selection)** | Multiple Shift+Left visible | Only use when needed | ✅ Minimized |
-| **JetBrains autocomplete** | Code completion popup | Bundle ID detection | ✅ Fixed |
-| **Excel cell autocomplete** | Cell suggestions | Bundle ID detection | ✅ Fixed |
-
-### Accessibility Permission
-
-#### macOS System Requirement
-- **API**: `AXIsProcessTrusted()` checks if app has Accessibility permission
-- **User Flow**:
-  1. App requests permission on first run
-  2. User goes to: System Settings → Privacy & Security → Accessibility
-  3. User adds GoNhanh to the list
-  4. App restart required to acquire permissions
-  5. Once granted, app can create CGEventTap
-
-#### Permission Checking
-```swift
-// Check permission before starting keyboard hook
-let trusted = AXIsProcessTrusted()
-if !trusted {
-    // Prompt and open System Settings
-    let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
-    AXIsProcessTrustedWithOptions(options as CFDictionary)
-}
-```
-
-### Global Hotkey: Ctrl+Space
-
-```swift
-// Virtual keycode 0x31 = Space
-// Flag: maskControl, NOT maskCommand
-
-func isToggleHotkey(_ keyCode: UInt16, _ flags: CGEventFlags) -> Bool {
-    keyCode == 0x31 &&
-    flags.contains(.maskControl) &&
-    !flags.contains(.maskCommand)  // Exclude Cmd+Space (macOS Spotlight)
-}
-
-// When matched: Post NotificationCenter event
-NotificationCenter.default.post(name: .toggleVietnamese, object: nil)
-
-// Consume event (don't pass to app)
-return nil
-```
-
-## Component Interactions
-
-### Initialization Sequence
-```
-1. AppDelegate.applicationDidFinishLaunching
-   ├─ Show OnboardingView (if first run)
-   └─ On complete: MenuBarController.init()
-
-2. MenuBarController.init()
-   ├─ Create status bar icon
-   ├─ Load settings from UserDefaults
-   ├─ If accessibility trusted: startEngine()
-   └─ Otherwise: show permission prompt
-
-3. startEngine()
-   ├─ RustBridge.initialize()
-   │  └─ Call ime_init() (once, thread-safe)
-   ├─ KeyboardHookManager.shared.start()
-   │  └─ Create CGEventTap, enable listening
-   ├─ RustBridge.setEnabled(true)
-   └─ RustBridge.setMethod(userMethod)
-```
-
-### Runtime Flow
-```
-User types key
-   ↓
-CGEventTap callback fires
-   ↓
-Extract keycode + modifier flags
-   ↓
-Check global hotkey (Ctrl+Space) → Toggle Vietnamese
-   ↓
-Call RustBridge.processKey()
-   ├─ Call ime_key(keycode, caps, ctrl)
-   ├─ Receive ImeResult
-   ├─ Extract UTF-32 chars → Character array
-   └─ Return (backspaceCount, chars) tuple
-   ↓
-If transformation:
-   ├─ Send backspaces (CGEvent)
-   ├─ Send Unicode replacement
-   └─ Consume original key (return nil)
-   ↓
-Else: Pass through (return unmodified event)
-   ↓
-Visible to user as transformed or original text
-```
-
-## Performance Characteristics
-
-### Windows Platform Text Injection
-
-**Text Injection Method** (Windows-specific implementation):
-
-Windows uses **Unicode injection via SendInput API** with `KEYEVENTF_UNICODE` flag:
-- **Direct Unicode injection**: Characters injected as keyboard events (similar to macOS `CGEvent.keyboardSetUnicodeString`)
-- **Preserves clipboard**: User's clipboard content remains unchanged when typing Vietnamese
-- **Uppercase correctness**: Shift state properly maintained for diacritical characters (Shift+DD → Đ)
-- **No clipboard pollution**: Previous implementation used `Clipboard.SetText()` + Ctrl+V, which overwrote user's clipboard
-
-**Implementation** (`TextSender.cs`, optimized 2025-12-26):
+**Unicode injection (KEYEVENTF_UNICODE)**:
 ```csharp
 // Batched Unicode injection - all characters in single SendInput call
 var inputs = new INPUT[text.Length * 2]; // 2 events per char (down + up)
@@ -494,126 +226,204 @@ foreach (char c in text) {
 SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
 ```
 
-**Performance Optimization** (2025-12-26):
-- Backspace delay increased: 2ms → 10ms (better app compatibility)
-- Batched Unicode injection: Single SendInput call instead of per-character calls
-- Reduces Windows event queue pressure and improves atomicity
+### Text Replacement Strategy
 
-### Windows Platform Advanced Features
+| Mode | Delay | Apps | Method |
+|------|-------|------|--------|
+| **Fast** | 10ms after backspace | Notepad, Word, standard apps | Batch SendInput |
+| **Slow** | 15ms + 20ms + 5ms/char | Electron, terminals, browsers | Character-by-character |
 
-**5 Advanced Settings** (Windows feature parity with macOS achieved):
+### App Detection (AppDetector.cs)
+
+**Slow Apps** (require delays for compatibility):
+- Electron apps: Claude, Notion, Slack, Discord, VS Code, Cursor
+- Terminals: Windows Terminal, cmd, PowerShell
+- Browsers: Chrome, Edge, Firefox
+- IDEs: VS Code, Cursor, Obsidian, Figma
+
+**Fast Apps** (default):
+- Notepad, Word, Excel, native Windows apps
+
+### Keyboard Event Processing Architecture
+
+**Current State**: Async queue architecture (Phase 1 - in progress)
+
+**Components**:
+1. **KeyEvent struct** (`Core/KeyEventQueue.cs`)
+   - Readonly struct (stack-allocated, lightweight)
+   - Fields: VirtualKeyCode, Shift, CapsLock, Timestamp
+   - Captures all data needed for processing
+
+2. **KeyEventQueue class** (`Core/KeyEventQueue.cs`)
+   - Thread-safe queue using ConcurrentQueue (lock-free)
+   - AutoResetEvent for efficient signaling
+   - Producer: Hook callback (enqueues in <1μs, non-blocking)
+   - Consumer: Worker thread (dequeues and processes)
+   - Atomic disposal with Interlocked for thread-safe cleanup
+
+**Legacy Issue** (to be resolved in Phase 2):
+- Thread.Sleep() in TextSender blocks KeyboardHook callback
+- Causes character ordering issues during fast typing
+- Will be eliminated once worker thread integration is complete
+
+### Engine Result Cases
+
+| Case | Action | Backspace | Output | Example (Telex) | Example (VNI) |
+|------|--------|-----------|--------|-----------------|---------------|
+| **Pass-through** | None | 0 | - | Normal letters, ctrl+key | Normal letters, ctrl+key |
+| **Mark (dấu thanh)** | Send | 1 | vowel+mark | `as` → `á` | `a1` → `á` |
+| **Tone (dấu mũ/móc)** | Send | 1+ | vowel+tone | `aa` → `â`, `ow` → `ơ` | `a6` → `â`, `o7` → `ơ` |
+| **Stroke (đ)** | Send | 1+ | đ | `dd` → `đ` | `d9` → `đ` |
+| **Compound ươ** | Send | 2 | ươ | `uow` → `ươ` | `u7o7` → `ươ` |
+| **Mark reposition** | Send | 2+ | repositioned | `hoaf` → `hoà` | `hoa2` → `hoà` |
+| **Revert (double key)** | Send | 1+ | original+key | `ass` → `as` | `a11` → `a1` |
+| **Word shortcut** | Send | N | expanded | `vn ` → `Việt Nam ` | same |
+| **W as ư (Telex)** | Send | 0 | ư | `w` → `ư`, `nhw` → `như` | N/A |
+
+### Global Hotkey Toggle
+
+```csharp
+// Check hotkey match in KeyboardHook.cs
+if (HotkeyEnabled && Hotkey != null && Hotkey.Matches(keyCode, ctrl, alt, shift))
+{
+    OnHotkeyTriggered?.Invoke();  // Toggle Vietnamese/English
+    return (IntPtr)1;              // Consume event
+}
+```
+
+**Default**: Ctrl+Space (configurable via AdvancedSettingsWindow)
+
+## Component Interactions
+
+### Initialization Sequence (Windows)
+```
+1. App.OnStartup()
+   ├─ EnsureSingleInstance() (Mutex)
+   ├─ RustBridge.Initialize() → ime_init()
+   ├─ SettingsService.Load() (Registry)
+   ├─ ShortcutsManager.Load() (Registry)
+   ├─ ApplySettings() → sync to Rust engine
+   ├─ KeyboardHook.Start() → SetWindowsHookEx
+   ├─ TrayIcon.Initialize() → NotifyIcon
+   └─ Show OnboardingWindow (if first run)
+```
+
+### Runtime Flow
+```
+User types key
+   ↓
+KeyboardHook.HookCallback (WH_KEYBOARD_LL)
+   ↓
+Extract vkCode + modifier state
+   ↓
+Check global hotkey (Ctrl+Space) → Toggle Vietnamese
+   ↓
+Call RustBridge.ProcessKey()
+   ├─ Translate Windows VK → macOS keycode
+   ├─ Call ime_key(keycode, caps, shift)
+   ├─ Receive ImeResult
+   └─ Return (backspaceCount, chars) tuple
+   ↓
+If transformation:
+   ├─ TextSender.SendText(text, backspaces)
+   │  ├─ SendBackspaces (batch SendInput)
+   │  ├─ Thread.Sleep(10ms) for compatibility
+   │  └─ SendUnicodeText (batch SendInput)
+   └─ Block original key (return 1)
+   ↓
+Else: Pass through (CallNextHookEx)
+   ↓
+Visible to user as transformed or original text
+```
+
+## Advanced Features
+
+### 5 Advanced Settings
 
 1. **Skip W Shortcut** (`ime_skip_w_shortcut`)
    - Controls w→ư shortcut in Telex mode
-   - When enabled: 'w' at word start stays as 'w' instead of 'ư'
    - Default: false (w→ư shortcut active)
 
 2. **ESC Restore** (`ime_esc_restore`)
    - ESC key restores raw ASCII input
-   - When enabled: pressing ESC reverts Vietnamese to original keystrokes
    - Default: true
 
 3. **Free Tone** (`ime_free_tone`)
    - Enable free tone placement without validation
-   - When enabled: allows placing diacritics anywhere, skips Vietnamese spelling rules
    - Default: false (validation active)
 
 4. **English Auto-Restore** (`ime_english_auto_restore`)
-   - Auto-detect and restore English words (text, expect, user, window, etc.)
-   - When enabled: automatically reverts accidentally transformed English words
+   - Auto-detect and restore English words (text, expect, user, etc.)
    - Default: false
 
 5. **Auto-Capitalize** (`ime_auto_capitalize`)
-   - Auto-capitalize first letter after sentence-ending punctuation
-   - Triggers after: `.` `!` `?` Enter
-   - Space is neutral key (does not reset pending_capitalize, fixed 2025-12-26)
+   - Auto-capitalize after sentence-ending punctuation (`.` `!` `?` Enter)
+   - Space is neutral key (does not reset pending_capitalize)
    - Default: true
 
-**Global Hotkey Toggle** (NEW - 2025-12-26):
-- Configurable keyboard shortcut to toggle Vietnamese/English input (default: Ctrl+Space)
+### Global Hotkey Toggle
+
+- Default: Ctrl+Space (configurable via AdvancedSettingsWindow)
 - KeyboardShortcut model: KeyCode + Modifiers (Ctrl/Alt/Shift/Win)
 - HotkeyRecorder UserControl for recording shortcuts with keycap-style UI
 - System shortcut conflict detection (blocks Ctrl+C/V/X/A/Z/Y, Alt+Tab/F4)
-- Hotkey detection integrated in KeyboardHook via OnHotkeyTriggered event
 - Registry persistence: `HKCU\SOFTWARE\GoNhanh\ToggleHotkey`
-- Wired up in App.xaml.cs to toggle IME enabled/disabled state
 
-**Auto-Start Configuration** (NEW - 2025-12-26):
-- Windows auto-start on login via Registry (`HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`)
-- UI toggle in OnboardingWindow (Page 3 during setup)
-- UI toggle in AdvancedSettingsWindow for existing users
-- SettingsService manages auto-start state
+### Shortcuts Manager
 
-**Shortcuts Manager**:
 - User-defined abbreviations (vn→Việt Nam, ko→không)
 - Registry persistence at `HKCU\SOFTWARE\GoNhanh\Shortcuts`
 - Auto-sync with Rust engine via FFI
 - Default Vietnamese abbreviations: vn, hn, hcm, ko, dc, vs, ms
 
-**Registry Settings**:
+### Registry Settings
+
 - Path: `HKCU\SOFTWARE\GoNhanh`
 - 5 advanced settings stored as DWord values
 - ToggleHotkey stored as string value (KeyCode:Modifiers format)
 - Shortcuts stored in subkey with trigger→replacement mapping
-- Auto-start integration via `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`
+- Auto-start: `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`
 
 ## Performance Characteristics
 
 ### Latency Budget
 | Component | Time | Notes |
 |-----------|------|-------|
-| CGEventTap callback | ~50μs | System kernel time |
+| KeyboardHook callback | ~50μs | System kernel time |
 | Rust ime_key() | ~100-200μs | Engine processing |
-| Swift RustBridge | ~50μs | FFI overhead + result conversion |
-| CGEvent sending | ~100-200μs | Posting to event tap |
+| RustBridge P/Invoke | ~50μs | FFI overhead |
+| SendInput | ~100-200μs | Text injection |
 | **Total** | **~300-500μs** | <1ms requirement met |
 
 ### Memory Profile
 | Component | Size | Notes |
 |-----------|------|-------|
-| Rust engine (static) | ~150KB | Tables + code |
-| Swift runtime | ~4.5MB | Standard SwiftUI overhead |
-| Buffer (64 chars) | ~200B | Circular buffer per engine instance |
-| **Total** | **~5MB** | Matches requirement |
+| Rust DLL | ~150KB | Tables + code |
+| WPF runtime | ~10MB | Standard .NET overhead |
+| Buffer (64 chars) | ~200B | Circular buffer |
+| **Total** | **~10-15MB** | Meets requirement |
 
 ### Scalability
-- **Multi-user**: App per user, each runs own engine instance
-- **Concurrent**: Mutex-protected ENGINE global (thread-safe)
-- **Continuous**: No memory leaks (tested with 600+ tests across 19 test files)
-- **No limits**: Can type indefinitely without performance degradation
-- **Cross-platform**: Single Rust core (~3,500 LOC) shared across macOS, Windows, Linux
+- **Single instance**: Mutex-protected (one app per user)
+- **Thread-safe**: ENGINE global protected by Mutex
+- **Continuous**: No memory leaks (tested with 600+ tests)
+- **No limits**: Type indefinitely without performance degradation
 
 ---
 
-**Last Updated**: 2025-12-26
-**Architecture Version**: 2.0 (Validation-First, Cross-Platform)
-**Platforms**: macOS (v1.0.89+, CGEventTap), Windows (production, feature parity + hotkey toggle, SetWindowsHookEx), Linux (beta, Fcitx5)
+**Last Updated**: 2025-12-30
+**Architecture Version**: 2.1 (Windows-only)
+**Platform**: Windows 10/11 (.NET 8, WPF)
 **Diagram Format**: ASCII (compatible with all documentation viewers)
-**Codebase Metrics**: ~370,000+ tokens (estimated), ~1,400,000+ chars (estimated), 127+ files
 
-**Windows Platform Recent Updates (2025-12-26)**:
-- ✅ **Phase 1: Core Verification** (auto-capitalize, batched SendInput, punctuation keys)
-  - Auto-capitalize fix: Space no longer resets pending_capitalize
-  - Batched SendInput: Single call for all characters (better atomicity)
-  - Punctuation key mappings: 7 keys added for sentence-ending detection
-  - Buffer clear logic: Only TAB/ESC clear buffer (Space/Enter go to core)
-  - Removed Ctrl+0 menu shortcut (use global hotkey instead)
-  - Increased backspace delay: 2ms → 10ms (better app compatibility)
-- ✅ **Unicode text injection** - Replaced clipboard-based injection (preserves clipboard, fixes uppercase)
-- ✅ **Uppercase fix** - Engine checks both CapsLock and Shift (Shift+DD now produces Đ correctly)
-- ✅ Global hotkey toggle (Ctrl+Space default, configurable via HotkeyRecorder)
-- ✅ KeyboardShortcut model with Registry serialization
-- ✅ HotkeyRecorder UserControl with keycap-style UI and conflict detection
-- ✅ AutoStart UI in OnboardingWindow (Page 3) and AdvancedSettingsWindow
-- ✅ KeyboardHook OnHotkeyTriggered event integration
-- ✅ App.xaml.cs wiring for hotkey → toggle IME state
+**Known Issues**:
+- Race condition with fast typing (planned fix: async queue architecture)
 
-**Windows Platform Complete Features**:
-- ✅ 11 RustBridge FFI methods for advanced features
+**Complete Features**:
+- ✅ 11 RustBridge FFI methods
 - ✅ 5 advanced settings with Registry persistence
-- ✅ ShortcutsManager service with Registry storage
-- ✅ AdvancedSettingsWindow UI
-- ✅ Global hotkey toggle
+- ✅ ShortcutsManager service
+- ✅ Global hotkey toggle (configurable)
 - ✅ Auto-start configuration
 - ✅ Unicode text injection (clipboard-safe)
-- ✅ Full feature parity with macOS version
+- ✅ Full Vietnamese input support (Telex/VNI)

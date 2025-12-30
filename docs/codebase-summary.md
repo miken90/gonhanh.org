@@ -1,12 +1,14 @@
-# Gõ Nhanh: Codebase Summary
+# FKey: Codebase Summary
 
-Complete directory structure, module responsibilities, and development entry points for the Gõ Nhanh Vietnamese Input Method Engine.
+> **Note**: FKey v1.6.0 - Windows-only Vietnamese keyboard input
+
+Complete directory structure, module responsibilities, and development entry points for the FKey Vietnamese Input Method Engine.
 
 ## Directory Structure
 
 ```
 gonhanh.org/
-├── core/                          # Rust engine (100% platform-agnostic)
+├── core/                          # Rust engine (platform-agnostic)
 │   ├── src/
 │   │   ├── lib.rs                # FFI exports (ime_init, ime_key, ime_method, etc.)
 │   │   ├── utils.rs              # Utility functions (char conversions, etc.)
@@ -21,101 +23,57 @@ gonhanh.org/
 │   │   │
 │   │   ├── input/                # Input method strategies
 │   │   │   ├── mod.rs            # Input trait + method registry
-│   │   │   ├── telex.rs          # Telex method (a/e/o/w for tones, s/f/r/x/j for marks)
-│   │   │   └── vni.rs            # VNI method (1-5 for marks, 6-8 for tones, 9 for đ)
+│   │   │   ├── telex.rs          # Telex method (s/f/r/x/j for marks)
+│   │   │   └── vni.rs            # VNI method (1-5 for marks, 6-8 for tones)
 │   │   │
 │   │   └── data/                 # Static Vietnamese linguistic data
 │   │       ├── mod.rs            # Data module exports
-│   │       ├── keys.rs           # Telex/VNI keycode to transformation mappings
-│   │       ├── chars.rs          # Character data (UTF-32 constants, casing)
+│   │       ├── keys.rs           # Keycode to transformation mappings
+│   │       ├── chars.rs          # Character data (UTF-32 constants)
 │   │       ├── vowel.rs          # Vowel table (72 entries: 12 bases × 6 marks)
-│   │       └── constants.rs      # Constants (consonants, valid clusters, etc.)
+│   │       └── constants.rs      # Constants (consonants, valid clusters)
 │   │
-│   ├── tests/                    # Integration + unit tests (2100+ lines)
-│   │   ├── common/mod.rs         # Test utilities (IME helper, test setup)
-│   │   ├── unit_test.rs          # Unit tests for individual modules
-│   │   ├── typing_test.rs        # Full keystroke sequences (Telex + VNI)
-│   │   ├── engine_test.rs        # Engine initialization + state tests
-│   │   ├── integration_test.rs   # End-to-end keystroke→output tests
-│   │   └── paragraph_test.rs     # Multi-word paragraph typing tests
-│   │
+│   ├── tests/                    # Integration + unit tests (700+ tests)
 │   └── Cargo.toml               # Rust dependencies (zero production deps)
 │
-├── platforms/                    # Platform-specific implementations
-│   │
-│   ├── macos/                   # Production: SwiftUI app (~1700 LOC)
-│   │   ├── App.swift            # AppDelegate + main application setup
-│   │   ├── RustBridge.swift     # FFI bridge to Rust engine (CRITICAL)
-│   │   ├── MenuBar.swift        # Status bar UI + menu items
-│   │   │
-│   │   ├── SettingsView.swift   # Input method selection + preferences
-│   │   ├── OnboardingView.swift # Accessibility permission setup wizard
-│   │   ├── AboutView.swift      # About window + version info
-│   │   ├── UpdateView.swift     # Update notification UI
-│   │   │
-│   │   ├── LaunchAtLogin.swift  # SMAppService integration (auto-launch)
-│   │   ├── UpdateManager.swift  # DMG download + version tracking
-│   │   ├── UpdateChecker.swift  # GitHub API integration (version checking)
-│   │   ├── AppMetadata.swift    # Shared app constants (version, names)
-│   │   │
-│   │   ├── libgonhanh_core.a    # Compiled universal Rust library (arm64 + x86_64)
-│   │   ├── GoNhanh.xcodeproj/   # Xcode project + build settings
-│   │   ├── Assets.xcassets/     # App icons (1024×1024 down to 16×16)
-│   │   ├── dmg-resources/       # DMG installer background + resources
-│   │   └── Tests/               # Swift unit tests (LaunchAtLoginTests.swift)
-│   │
-│   ├── windows/                 # Production: WPF/.NET 8 app (~1500 LOC)
-│   │   ├── App.xaml.cs          # Application entry point + global hotkey wiring
-│   │   ├── Core/
-│   │   │   ├── RustBridge.cs    # FFI bridge to Rust engine (11 FFI methods)
-│   │   │   ├── KeyboardHook.cs  # SetWindowsHookEx + global hotkey detection
-│   │   │   ├── KeyboardShortcut.cs  # Hotkey model with KeyCode+Modifiers
-│   │   │   ├── KeyCodes.cs      # Windows virtual keycodes mapping
-│   │   │   ├── TextSender.cs    # Text input simulation (SendInput)
-│   │   │   └── AppMetadata.cs   # Shared app constants (version, names)
-│   │   ├── Services/
-│   │   │   ├── SettingsService.cs   # Registry settings + ToggleHotkey property
-│   │   │   ├── UpdateService.cs     # Windows update checker
-│   │   │   └── ShortcutsManager.cs  # User shortcuts + Registry persistence
-│   │   ├── Views/
-│   │   │   ├── TrayIcon.cs      # System tray icon UI + menu
-│   │   │   ├── OnboardingWindow.xaml.cs # Setup wizard + AutoStart checkbox
-│   │   │   ├── AboutWindow.xaml.cs      # About dialog
-│   │   │   ├── SettingsWindow.xaml.cs   # Preferences window
-│   │   │   └── AdvancedSettingsWindow.xaml.cs # Advanced settings + hotkey config
-│   │   ├── Controls/
-│   │   │   ├── HotkeyRecorder.xaml      # HotkeyRecorder UserControl UI
-│   │   │   └── HotkeyRecorder.xaml.cs   # Click-to-record hotkey with keycap UI
-│   │   └── libgonhanh_core.dll  # Compiled Rust DLL
-│   │
-│   └── linux/                   # Beta: Fcitx5 addon (~500 LOC)
-│       ├── src/
-│       │   ├── Engine.h/cpp      # Fcitx5 InputMethodEngine implementation
-│       │   ├── RustBridge.h/cpp  # C++ FFI wrapper to Rust core
-│       │   └── KeycodeMap.h      # X11/Wayland keysym → keycode mapping
-│       ├── data/
-│       │   ├── gonhanh-addon.conf # Fcitx5 addon registration
-│       │   └── gonhanh.conf      # Input method configuration
-│       ├── scripts/
-│       │   ├── build.sh          # CMake build script
-│       │   └── install.sh        # User-local installation script
-│       └── libgonhanh_core.so    # Compiled Rust shared library (x86_64)
+├── platforms/
+│   └── windows/                  # Production: WPF/.NET 8 app
+│       └── GoNhanh/
+│           ├── App.xaml.cs       # Application entry point
+│           ├── Core/
+│           │   ├── RustBridge.cs         # FFI bridge (11 methods)
+│           │   ├── KeyboardHook.cs       # SetWindowsHookEx
+│           │   ├── KeyEventQueue.cs      # Thread-safe async event queue
+│           │   ├── TextSender.cs         # SendInput Unicode injection
+│           │   ├── AppDetector.cs        # Fast/Slow mode detection
+│           │   ├── KeyCodes.cs           # Windows VK codes
+│           │   └── KeyboardShortcut.cs   # Hotkey model
+│           ├── Services/
+│           │   ├── SettingsService.cs    # Registry persistence
+│           │   └── ShortcutsManager.cs   # User shortcuts
+│           ├── Views/
+│           │   ├── TrayIcon.cs           # System tray UI
+│           │   ├── OnboardingWindow.xaml # Setup wizard
+│           │   ├── AdvancedSettingsWindow.xaml  # Settings UI
+│           │   └── AboutWindow.xaml      # About dialog
+│           ├── Controls/
+│           │   └── HotkeyRecorder.xaml   # Hotkey recording control
+│           └── Native/
+│               └── gonhanh_core.dll  # Compiled Rust DLL
 │
 ├── scripts/                     # Build automation
-│   ├── setup.sh                # Environment setup (installs Rust, arms cargo-nextest)
-│   ├── build-core.sh           # Build universal Rust library (arm64 + x86_64)
-│   ├── build-macos.sh          # Build macOS SwiftUI app + DMG
-│   ├── build-windows.ps1       # PowerShell build script for Windows
-│   └── generate-release-notes.sh # Release notes generator
+│   ├── build-core.sh           # Build Rust library
+│   ├── build-windows.sh        # Build Windows app
+│   └── setup.sh                # Environment setup
 │
-├── Makefile                    # Main build targets
-├── .github/workflows/          # CI/CD automation
-│   ├── ci.yml                 # Run on push/PR: format, clippy, tests
-│   └── release.yml            # Run on tags: build, create GitHub release
+├── docs/                       # Documentation
+│   ├── project-overview-pdr.md
+│   ├── system-architecture.md
+│   ├── codebase-summary.md     # This file
+│   └── code-standards.md
 │
-├── CLAUDE.md                   # Developer guidance (architecture, patterns, commands)
-├── README.md                   # Project overview + quick start
-└── docs/                       # Documentation (this folder)
+└── plans/                      # Implementation plans
+    └── 251230-1340-async-queue-keyboard/  # Race condition fix plan
 ```
 
 ## Core Module Responsibilities
@@ -275,189 +233,62 @@ pub struct Result {
 }
 ```
 
-## Platform-Specific Modules
+## Windows Platform Modules
 
-### macOS Platform (platforms/macos/)
-
-#### `RustBridge.swift` - FFI Bridge (CRITICAL)
-**Lines**: ~250 | **Responsibility**: Bridge Rust ↔ Swift | **Source**: `platforms/macos/RustBridge.swift`
-
-Must declare `ImeResult` struct matching Rust `Result` byte-for-byte. Wraps all 6 Rust FFI functions. Handles pointer safety with `defer { ime_free(ptr) }`.
-
-#### `MenuBar.swift` - Status Bar UI
-**Lines**: ~350 | **Responsibility**: Main app UI | **Source**: `platforms/macos/MenuBar.swift`
-
-Creates NSStatusBar, manages menu items: Enable/Disable, Input Method, Settings, About, Quit. Handles global Ctrl+Space hotkey.
-
-#### `App.swift` - Application Delegate
-**Source**: `platforms/macos/App.swift`
-
-AppDelegate for NSApplication. First-run detection, MenuBarController initialization, accessibility permission checking.
-
-#### Other Swift Files
-- `OnboardingView.swift` - Permission setup wizard
-- `LaunchAtLogin.swift` - SMAppService integration
-- `UpdateManager.swift` - DMG download + mounting
-- `UpdateChecker.swift` - GitHub release checking
-- `SettingsView.swift`, `AboutView.swift`, `UpdateView.swift` - UI components
-- `AppMetadata.swift` - Shared app constants
-
-### Windows Platform (platforms/windows/)
-
-#### `Core/RustBridge.cs` - FFI Bridge
-**Source**: `platforms/windows/Core/RustBridge.cs`
-
+### `Core/RustBridge.cs` - FFI Bridge
 P/Invoke signatures matching Rust FFI, UTF-32 interop, memory management.
 
-**Advanced FFI Methods** (11 total):
-- `ime_skip_w_shortcut(bool)` - Skip w→ư shortcut in Telex
-- `ime_esc_restore(bool)` - ESC key restores raw ASCII
-- `ime_free_tone(bool)` - Free tone placement (skip validation)
-- `ime_english_auto_restore(bool)` - Auto-restore English words
-- `ime_auto_capitalize(bool)` - Auto-capitalize after punctuation
-- `ime_clear_all()` - Clear buffer + word history
-- `ime_get_buffer(IntPtr, int)` - Get full buffer (UTF-32)
-- `ime_restore_word(IntPtr)` - Restore Vietnamese word to buffer
-- `ime_add_shortcut(IntPtr, IntPtr)` - Add user shortcut
-- `ime_remove_shortcut(IntPtr)` - Remove shortcut
-- `ime_clear_shortcuts()` - Clear all shortcuts
+**11 FFI Methods**:
+- `ime_init()`, `ime_key()`, `ime_method()`, `ime_enabled()`, `ime_clear()`
+- `ime_skip_w_shortcut(bool)` - Skip w→ư shortcut
+- `ime_esc_restore(bool)` - ESC restores raw ASCII
+- `ime_free_tone(bool)` - Free tone placement
+- `ime_english_auto_restore(bool)` - Auto-restore English
+- `ime_auto_capitalize(bool)` - Auto-capitalize
+- `ime_add/remove/clear_shortcuts()` - Shortcut management
 
-**Punctuation Key Mappings** (added 2025-12-26):
-- Added mappings for 7 punctuation keys to macOS keycodes
-- Required for auto-capitalize: `.` `!` `?` `,` `;` `'` `-` `=`
-- Enables sentence-ending detection in Windows platform
+### `Core/KeyEventQueue.cs` - Async Event Queue
+**Lines**: ~100 | **Complexity**: Medium | **Source**: `platforms/windows/GoNhanh/Core/KeyEventQueue.cs`
 
-#### `Core/KeyCodes.cs` - Windows Virtual Keycodes
-**Source**: `platforms/windows/Core/KeyCodes.cs`
+Thread-safe queue for keyboard events. Producer-consumer pattern with lock-free ConcurrentQueue and efficient AutoResetEvent signaling.
 
-Maps Windows virtual keycodes to macOS keycode space for FFI compatibility.
+**KeyEvent struct**:
+- Readonly struct (stack-allocated, ~16 bytes)
+- Fields: VirtualKeyCode (ushort), Shift (bool), CapsLock (bool), Timestamp (long)
 
-**IsRelevantKey Enhancement** (2025-12-26):
-- Added 7 punctuation keys: `.` `,` `/` `;` `'` `-` `=`
-- Required for auto-capitalize detection of sentence-ending punctuation (`.` `!` `?`)
-- Previously only tracked letters, numbers, and basic word-breaking keys
+**KeyEventQueue class**:
+- `Enqueue(KeyEvent)` - Non-blocking (<1μs), called from hook callback
+- `TryDequeue(out KeyEvent, timeoutMs)` - Blocking dequeue for worker thread
+- `Dispose()` - Atomic disposal with graceful thread exit
+- Thread-safe with Volatile reads and Interlocked operations
 
-#### `Core/KeyboardShortcut.cs` - Hotkey Model
-**Source**: `platforms/windows/Core/KeyboardShortcut.cs`
+### `Core/KeyboardHook.cs` - Keyboard Interception
+SetWindowsHookEx for WH_KEYBOARD_LL hook. Includes global hotkey detection via OnHotkeyTriggered event.
 
-Keyboard shortcut representation with KeyCode + Modifiers (Ctrl/Alt/Shift/Win). Provides Matches() for detection, GetDisplayParts() for UI rendering, and Registry serialization (ToRegistryString/FromRegistryString).
+### `Core/TextSender.cs` - Text Injection
+Unicode injection via SendInput API with KEYEVENTF_UNICODE. Batched delivery, preserves clipboard.
 
-#### `Core/KeyboardHook.cs` - Keyboard Interception + Hotkey Detection
-**Source**: `platforms/windows/Core/KeyboardHook.cs`
+**Modes**:
+- Fast: 10ms delay after backspaces
+- Slow: 15ms + 20ms + 5ms per char (Electron/terminals)
 
-SetWindowsHookEx for system-wide WH_KEYBOARD_LL hook, WM_KEYDOWN processing. Includes Hotkey property for configurable global hotkey and OnHotkeyTriggered event for Vietnamese/English toggle.
+### `Services/SettingsService.cs` - Registry Persistence
+Registry path: `HKCU\SOFTWARE\GoNhanh`
+- 5 advanced settings as DWord values
+- ToggleHotkey as string value
+- Shortcuts in subkey
 
-**Buffer Clear Logic** (fixed 2025-12-26):
-- Only TAB and ESC clear buffer immediately
-- Space and Enter must pass through to Rust core for auto-capitalize logic
-- Previous implementation cleared buffer on Space/Enter, breaking auto-capitalize
+### `Services/ShortcutsManager.cs` - User Shortcuts
+User-defined abbreviations with Registry persistence and Rust engine sync.
 
-#### `Core/TextSender.cs` - Text Input Simulation
-**Source**: `platforms/windows/Core/TextSender.cs`
+### `Views/TrayIcon.cs` - System Tray UI
+NotifyIcon with context menu: Enable/Disable, Input Method, Settings, About.
 
-Sends text to active window using **Unicode injection via SendInput API** with `KEYEVENTF_UNICODE` flag (as of 2025-12-26). Replaced previous clipboard-based method to preserve user's clipboard content and correctly maintain uppercase state.
+### `Views/AdvancedSettingsWindow.xaml.cs` - Settings UI
+Configuration for 5 advanced settings + global hotkey via HotkeyRecorder control.
 
-**Text Injection Strategy**:
-- **Direct Unicode injection**: Characters injected as keyboard events (similar to macOS `CGEvent.keyboardSetUnicodeString`)
-- **No clipboard pollution**: Previously used `Clipboard.SetText()` + Ctrl+V, now uses direct Unicode
-- **Uppercase correctness**: Properly handles Shift state for diacritical characters (Shift+DD → Đ)
-- **Batched SendInput** (optimized 2025-12-26): All characters sent in single SendInput call for atomic delivery
-
-**Key Methods**:
-- `SendText(string text, int backspaces)` - Main entry point for text replacement
-- `SendBackspaces(int count, IntPtr marker)` - Batch backspace injection
-- `SendUnicodeText(string text, IntPtr marker)` - Batched Unicode injection (2 events per char: down+up)
-
-**Performance Optimization** (2025-12-26):
-- Increased backspace delay: 2ms → 10ms (better reliability with some apps)
-- Batched Unicode text injection: Single SendInput call for all characters
-- Reduces Windows event queue pressure and improves atomicity
-
-#### `Services/SettingsService.cs` - Registry Persistence
-**Source**: `platforms/windows/Services/SettingsService.cs`
-
-Stores user preferences, input method selection, enable/disable state, and global hotkey configuration.
-
-**Advanced Settings Properties** (5 total):
-- `SkipWShortcut` - Skip w→ư shortcut in Telex mode (default: false)
-- `EscRestore` - ESC key restores raw ASCII input (default: true)
-- `FreeTone` - Enable free tone placement without validation (default: false)
-- `EnglishAutoRestore` - Auto-restore English words like "text", "expect" (default: false)
-- `AutoCapitalize` - Auto-capitalize after sentence-ending punctuation (default: true)
-
-**Hotkey Settings**:
-- `ToggleHotkey` - KeyboardShortcut property for global Vietnamese/English toggle (default: Ctrl+Space)
-- Persisted to Registry, loaded on startup
-
-**Registry Keys**:
-- Path: `HKCU\SOFTWARE\GoNhanh`
-- Shortcuts: `HKCU\SOFTWARE\GoNhanh\Shortcuts`
-- Hotkey: Stored as `ToggleHotkey` string value
-
-#### `Services/ShortcutsManager.cs` - User Shortcuts Management
-**Source**: `platforms/windows/Services/ShortcutsManager.cs`
-
-Manages user-defined shortcuts (abbreviations like "vn" → "Việt Nam"). Persists shortcuts to Registry, syncs with Rust engine via RustBridge FFI.
-
-**Key Features**:
-- Load/Save shortcuts from/to Registry
-- Add, Remove, Clear shortcuts
-- Default Vietnamese abbreviations (vn, hn, hcm, ko, dc, vs, ms, etc.)
-- Auto-sync with Rust engine on every change
-
-#### `Views/TrayIcon.cs` - System Tray UI
-**Source**: `platforms/windows/Views/TrayIcon.cs`
-
-NotifyIcon creation, context menu: Enable/Disable, Input Method, Settings, About.
-
-**Menu Shortcut Removal** (2025-12-26):
-- Removed Ctrl+0 shortcut from "Bật/Tắt" menu item
-- Users should use global hotkey (Ctrl+Space by default) instead
-- Avoids conflict with browser/IDE shortcuts
-
-#### `Views/OnboardingWindow.xaml.cs` - Setup Wizard
-**Source**: `platforms/windows/Views/OnboardingWindow.xaml.cs`
-
-Multi-page setup wizard with AutoStart checkbox on Page 3 for enabling Windows auto-start feature during initial setup.
-
-#### `Views/AdvancedSettingsWindow.xaml.cs` - Advanced Features UI
-**Source**: `platforms/windows/Views/AdvancedSettingsWindow.xaml.cs`
-
-WPF window for configuring 5 advanced features + global hotkey:
-- AutoStart toggle (Windows auto-start on login)
-- Skip W Shortcut (Telex mode w→ư behavior)
-- ESC Restore (ESC key restores raw ASCII)
-- Free Tone (disable validation, place diacritics anywhere)
-- English Auto-Restore (auto-detect and restore English words)
-- Auto-Capitalize (capitalize after . ! ? Enter)
-- Global Hotkey configuration (HotkeyRecorder control)
-
-#### `Controls/HotkeyRecorder.xaml.cs` - Hotkey Recording Control
-**Source**: `platforms/windows/Controls/HotkeyRecorder.xaml.cs`
-
-Custom WPF UserControl for recording keyboard shortcuts. Features:
-- Click-to-record interaction (focus-based recording)
-- Keycap-style UI display (visual keyboard key representation)
-- System shortcut conflict detection (blocks Ctrl+C/V/X/A/Z/Y, Alt+Tab/F4)
-- Validates against reserved Windows shortcuts
-- Exposes Hotkey property for data binding
-
-### Linux Platform (platforms/linux/)
-
-#### `src/Engine.h/cpp` - Fcitx5 Integration
-**Lines**: ~200 | **Responsibility**: Input method engine | **Source**: `platforms/linux/src/Engine.h/cpp`
-
-Implements Fcitx5 `InputMethodEngine` interface. Handles input method registration, key processing, and candidate list management.
-
-#### `src/RustBridge.h/cpp` - C++ FFI Wrapper
-**Lines**: ~150 | **Responsibility**: Bridge C++ ↔ Rust | **Source**: `platforms/linux/src/RustBridge.h/cpp`
-
-C++ wrapper around Rust FFI, handles UTF-32 conversion and memory safety.
-
-#### `src/KeycodeMap.h` - Keycode Mapping
-**Source**: `platforms/linux/src/KeycodeMap.h`
-
-Maps X11/Wayland keysyms to internal keycode representation for compatibility with macOS keycode space.
+### `Controls/HotkeyRecorder.xaml.cs` - Hotkey Recording
+Custom WPF UserControl with keycap-style UI and system shortcut conflict detection.
 
 ## Test Coverage
 
@@ -572,46 +403,27 @@ RustBridge.cs (Windows)
 - Static data: ~150KB (vowel table, keycodes, constants)
 - ENGINE global: ~500B (struct only)
 - Per keystroke: Stack-allocated arrays only (no heap)
-- SwiftUI overhead: ~4.5MB (standard)
+- WPF/.NET 8 overhead: ~10MB (standard)
 
-**Total app**: ~5MB resident
+**Total app**: ~10-15MB resident
 
 ---
 
-**Last Updated**: 2025-12-26
-**Total Files**: 127+ files (includes new HotkeyRecorder control)
-**Total Tokens**: ~370,000+ tokens (estimated)
-**Total Characters**: ~1,400,000+ chars (estimated)
+**Last Updated**: 2025-12-30
+**Total Files**: 80+ files (Windows-only build)
+**Platform**: Windows 10/11 (.NET 8, WPF)
 **Coverage**: 100% of directories documented
-**Platforms**: macOS (v1.0.89+), Windows (production, feature parity + hotkey toggle), Linux (beta)
 
-**Windows Platform Recent Updates (2025-12-26)**:
-- ✅ **Phase 1: Core Verification** (auto-capitalize, batched SendInput, punctuation keys)
-  - Auto-capitalize fix: Space no longer resets pending_capitalize
-  - Batched SendInput: Single call for all characters (better atomicity)
-  - Punctuation key mappings: 7 keys added for sentence-ending detection
-  - Buffer clear logic: Only TAB/ESC clear buffer (Space/Enter go to core)
-  - Removed Ctrl+0 menu shortcut (use global hotkey instead)
-  - Increased backspace delay: 2ms → 10ms (better app compatibility)
-- ✅ **Unicode text injection** - Replaced clipboard-based injection (TextSender.cs, preserves clipboard)
-- ✅ **Uppercase fix** - Engine checks CapsLock OR Shift (mod.rs:721, Shift+DD → Đ works correctly)
-- ✅ Global hotkey toggle (Ctrl+Space default, configurable)
-- ✅ HotkeyRecorder UserControl with keycap-style UI
-- ✅ KeyboardShortcut model with Registry serialization
-- ✅ AutoStart UI in OnboardingWindow (Page 3)
-- ✅ Hotkey configuration in AdvancedSettingsWindow
-- ✅ KeyboardHook integration with OnHotkeyTriggered event
-- ✅ System shortcut conflict detection
+**Known Issues**:
+- Race condition with fast typing (Phase 1 async queue complete, Phase 2 integration pending)
 
-**Windows Platform Complete Features**:
-- ✅ 5 Advanced Settings (SkipWShortcut, EscRestore, FreeTone, EnglishAutoRestore, AutoCapitalize)
+**Complete Features**:
+- ✅ 5 Advanced Settings
 - ✅ Shortcuts Manager with Registry persistence
-- ✅ Advanced Settings UI window
 - ✅ 11 RustBridge FFI methods
-- ✅ Global hotkey toggle
+- ✅ Global hotkey toggle (configurable)
 - ✅ Auto-start configuration
 - ✅ Unicode text injection (clipboard-safe)
-- ✅ Full feature compatibility with macOS version
 
 ## Top 5 Largest Files by Token Count
 
@@ -621,4 +433,4 @@ RustBridge.cs (Windows)
 | 2 | `core/tests/integration_test.rs` | 29,530 | 106,191 | 8.0% |
 | 3 | `docs/vietnamese-language-system.md` | 21,139 | 56,183 | 5.8% |
 | 4 | `core/tests/typing_test.rs` | 20,164 | 59,308 | 5.5% |
-| 5 | `platforms/macos/RustBridge.swift` | 14,421 | 59,869 | 3.9% |
+| 5 | `platforms/windows/GoNhanh/Core/RustBridge.cs` | ~5,000 | ~20,000 | 1.5% |
