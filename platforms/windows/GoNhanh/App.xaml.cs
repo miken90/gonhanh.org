@@ -46,18 +46,19 @@ public partial class App : System.Windows.Application
 
         ApplySettings();
 
-        // Initialize async keyboard processing (Phase 2)
-        // Note: Worker is ready but not wired to hook yet (Phase 3)
+        // Initialize async keyboard processing (Phase 2 + 3)
         _keyQueue = new KeyEventQueue();
         _keyWorker = new KeyboardWorker(_keyQueue);
         _keyWorker.OnKeyProcess = ProcessKeyFromWorker;
-        _keyWorker.Start();
 
-        // Initialize keyboard hook
+        // Initialize keyboard hook with async queue (Phase 3)
         _keyboardHook = new KeyboardHook();
-        _keyboardHook.KeyPressed += OnKeyPressed;
+        _keyboardHook.SetQueue(_keyQueue);  // Wire hook to queue
         _keyboardHook.Hotkey = _settings.ToggleHotkey;
         _keyboardHook.OnHotkeyTriggered += OnHotkeyTriggered;
+
+        // Start worker before hook to ensure events are processed
+        _keyWorker.Start();
         _keyboardHook.Start();
 
         // Initialize system tray
@@ -111,6 +112,12 @@ public partial class App : System.Windows.Application
         }
     }
 
+    /// <summary>
+    /// DEPRECATED: Synchronous key processing (Phase 1-2 legacy).
+    /// Now replaced by ProcessKeyFromWorker() in async flow.
+    /// Kept for reference only.
+    /// </summary>
+    [Obsolete("Use ProcessKeyFromWorker() for async processing")]
     private void OnKeyPressed(object? sender, KeyPressedEventArgs e)
     {
         if (!_settings.IsEnabled) return;
@@ -130,9 +137,8 @@ public partial class App : System.Windows.Application
     }
 
     /// <summary>
-    /// Process key from worker thread (Phase 2).
-    /// Same logic as OnKeyPressed but runs asynchronously.
-    /// Will be used when KeyboardHook is refactored in Phase 3.
+    /// Process key from worker thread (Phase 3 async flow).
+    /// Runs asynchronously - no blocking in hook callback.
     /// Note: SendInput works from any thread - no UI thread requirement.
     /// </summary>
     private void ProcessKeyFromWorker(KeyEvent evt)

@@ -246,7 +246,7 @@ SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
 
 ### Keyboard Event Processing Architecture
 
-**Current State**: Async queue architecture (Phase 2 - worker thread added)
+**Current State**: Async queue architecture COMPLETE (Phase 3 - hook wired to queue)
 
 **Components**:
 1. **KeyEvent struct** (`Core/KeyEventQueue.cs`)
@@ -268,9 +268,13 @@ SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
    - Error handling via catch-all with Debug.WriteLine
    - OnKeyProcess callback delegates to App.ProcessKeyFromWorker
 
-**Phase 3 Remaining Work**:
-- Wire KeyboardHook to enqueue events (currently still using OnKeyPressed)
-- Remove legacy OnKeyPressed path once validated
+4. **KeyboardHook integration** (`Core/KeyboardHook.cs` + `App.xaml.cs`)
+   - Hook.SetQueue(queue) wires hook to async queue
+   - HookCallback enqueues events in ASYNC MODE (lines 209-213)
+   - Legacy OnKeyPressed marked @Obsolete, kept for reference only
+   - Flow: Hook → Queue → Worker → ProcessKeyFromWorker → TextSender
+
+**Migration complete**: Legacy synchronous path deprecated, async flow active
 
 ### Engine Result Cases
 
@@ -309,37 +313,54 @@ if (HotkeyEnabled && Hotkey != null && Hotkey.Matches(keyCode, ctrl, alt, shift)
    ├─ SettingsService.Load() (Registry)
    ├─ ShortcutsManager.Load() (Registry)
    ├─ ApplySettings() → sync to Rust engine
-   ├─ KeyboardHook.Start() → SetWindowsHookEx
+   ├─ Create async pipeline:
+   │  ├─ KeyEventQueue (thread-safe ConcurrentQueue)
+   │  ├─ KeyboardWorker (background thread)
+   │  └─ Set OnKeyProcess callback
+   ├─ KeyboardHook.Start() + SetQueue(queue) → async mode
+   │  └─ Start worker BEFORE hook (ensure events processed)
    ├─ TrayIcon.Initialize() → NotifyIcon
    └─ Show OnboardingWindow (if first run)
 ```
 
-### Runtime Flow
+### Runtime Flow (Async Queue Architecture)
 ```
 User types key
    ↓
-KeyboardHook.HookCallback (WH_KEYBOARD_LL)
+KeyboardHook.HookCallback (WH_KEYBOARD_LL) - <50μs
    ↓
 Extract vkCode + modifier state
    ↓
 Check global hotkey (Ctrl+Space) → Toggle Vietnamese
    ↓
-Call RustBridge.ProcessKey()
-   ├─ Translate Windows VK → macOS keycode
-   ├─ Call ime_key(keycode, caps, shift)
-   ├─ Receive ImeResult
-   └─ Return (backspaceCount, chars) tuple
-   ↓
-If transformation:
-   ├─ TextSender.SendText(text, backspaces)
-   │  ├─ SendBackspaces (batch SendInput)
-   │  ├─ Thread.Sleep(10ms) for compatibility
-   │  └─ SendUnicodeText (batch SendInput)
-   └─ Block original key (return 1)
-   ↓
-Else: Pass through (CallNextHookEx)
-   ↓
-Visible to user as transformed or original text
+Check if async mode (_queue != null):
+   ├─ YES (ASYNC MODE - Phase 3):
+   │  ├─ Enqueue KeyEvent to queue (<1μs)
+   │  ├─ Return (IntPtr)1 immediately - block original key
+   │  └─ Hook callback exits (<1ms total)
+   │       ↓
+   │  [Worker Thread - runs concurrently]
+   │  KeyboardWorker.ProcessLoop
+   │       ↓
+   │  Dequeue event (blocks on AutoResetEvent)
+   │       ↓
+   │  ProcessKeyFromWorker(evt)
+   │       ├─ RustBridge.ProcessKey()
+   │       │  ├─ Translate Windows VK → macOS keycode
+   │       │  ├─ Call ime_key(keycode, caps, shift)
+   │       │  ├─ Receive ImeResult
+   │       │  └─ Return (backspaceCount, chars) tuple
+   │       ↓
+   │  If transformation:
+   │       ├─ TextSender.SendText(text, backspaces)
+   │       │  ├─ SendBackspaces (batch SendInput)
+   │       │  ├─ Thread.Sleep(10-15ms) - DOESN'T block hook
+   │       │  └─ SendUnicodeText (batch SendInput)
+   │       └─ Output visible to user
+   │
+   └─ NO (LEGACY MODE - deprecated):
+      ├─ Call OnKeyPressed event (synchronous)
+      └─ Process in hook callback thread (BLOCKS hook)
 ```
 
 ## Advanced Features
@@ -422,8 +443,8 @@ Visible to user as transformed or original text
 **Platform**: Windows 10/11 (.NET 8, WPF)
 **Diagram Format**: ASCII (compatible with all documentation viewers)
 
-**Known Issues**:
-- Race condition with fast typing (planned fix: async queue architecture)
+**Resolved Issues**:
+- ✅ Race condition with fast typing (FIXED via async queue architecture Phase 3)
 
 **Complete Features**:
 - ✅ 11 RustBridge FFI methods
@@ -433,3 +454,4 @@ Visible to user as transformed or original text
 - ✅ Auto-start configuration
 - ✅ Unicode text injection (clipboard-safe)
 - ✅ Full Vietnamese input support (Telex/VNI)
+- ✅ Async queue keyboard processing (Phase 3 - race condition fixed)

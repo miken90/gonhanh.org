@@ -103,6 +103,12 @@ cd platforms/windows/GoNhanh
 dotnet build -c Release
 ```
 
+### Known Issues
+
+- **Fast typing race condition**: Gõ quá nhanh có thể gây sai thứ tự ký tự
+  - Ví dụ: "hiện" → "hinệ", "không" → "kohng"
+  - Đang phát triển fix: async queue architecture
+
 ---
 
 ## 🙏 Lời cảm ơn

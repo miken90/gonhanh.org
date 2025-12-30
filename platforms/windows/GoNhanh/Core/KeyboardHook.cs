@@ -63,8 +63,8 @@ public class KeyboardHook : IDisposable
     private IntPtr _hookId = IntPtr.Zero;
     private bool _disposed;
 
-    // Flag to prevent recursive processing of injected keys
-    private bool _isProcessing;
+    // Async queue for keyboard events (Phase 3)
+    private KeyEventQueue? _queue;
 
     // Identifier for our injected keys (to skip processing them)
     private static readonly IntPtr InjectedKeyMarker = new IntPtr(0x474E4820); // "GNH " in hex
@@ -73,6 +73,8 @@ public class KeyboardHook : IDisposable
 
     #region Events
 
+    // Note: KeyPressed event kept for backward compatibility but deprecated
+    [Obsolete("Use SetQueue() for async processing instead")]
     public event EventHandler<KeyPressedEventArgs>? KeyPressed;
 
     /// <summary>
@@ -97,6 +99,15 @@ public class KeyboardHook : IDisposable
     #endregion
 
     #region Public Methods
+
+    /// <summary>
+    /// Set the async queue for keyboard events.
+    /// When set, HookCallback will enqueue events instead of invoking KeyPressed.
+    /// </summary>
+    public void SetQueue(KeyEventQueue queue)
+    {
+        _queue = queue;
+    }
 
     /// <summary>
     /// Start the keyboard hook
@@ -140,12 +151,6 @@ public class KeyboardHook : IDisposable
 
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        // Don't process if already processing (prevents recursion)
-        if (_isProcessing)
-        {
-            return CallNextHookEx(_hookId, nCode, wParam, lParam);
-        }
-
         // Only process key down events
         if (nCode >= 0 && (wParam == (IntPtr)WM_KEYDOWN || wParam == (IntPtr)WM_SYSKEYDOWN))
         {
@@ -157,7 +162,7 @@ public class KeyboardHook : IDisposable
                 return CallNextHookEx(_hookId, nCode, wParam, lParam);
             }
 
-            // Skip injected keys from other sources (optional, for safety)
+            // Skip injected keys from other sources
             if ((hookStruct.flags & LLKHF_INJECTED) != 0)
             {
                 return CallNextHookEx(_hookId, nCode, wParam, lParam);
@@ -165,15 +170,34 @@ public class KeyboardHook : IDisposable
 
             ushort keyCode = (ushort)hookStruct.vkCode;
 
-            // Check for toggle hotkey FIRST (before any other processing)
+            // Check modifier keys
             bool shift = IsKeyDown(KeyCodes.VK_SHIFT);
             bool ctrl = IsKeyDown(KeyCodes.VK_CONTROL);
             bool alt = IsKeyDown(KeyCodes.VK_MENU);
 
+            // Check for toggle hotkey FIRST (before any other processing)
             if (HotkeyEnabled && Hotkey != null && Hotkey.Matches(keyCode, ctrl, alt, shift))
             {
                 OnHotkeyTriggered?.Invoke();
                 return (IntPtr)1; // Consume the key
+            }
+
+            // Skip if Ctrl or Alt is pressed (shortcuts)
+            if (ctrl || alt)
+            {
+                // Clear buffer on Ctrl+key combinations
+                if (ctrl)
+                {
+                    RustBridge.Clear();
+                }
+                return CallNextHookEx(_hookId, nCode, wParam, lParam);
+            }
+
+            // Handle buffer-clearing keys (TAB, ESC only)
+            if (keyCode == KeyCodes.VK_TAB || keyCode == KeyCodes.VK_ESCAPE)
+            {
+                RustBridge.Clear();
+                return CallNextHookEx(_hookId, nCode, wParam, lParam);
             }
 
             // Only process relevant keys for Vietnamese input
@@ -181,43 +205,22 @@ public class KeyboardHook : IDisposable
             {
                 bool capsLock = IsCapsLockOn();
 
-                // Skip if Ctrl or Alt is pressed (shortcuts)
-                if (ctrl || alt)
+                // ASYNC MODE: Enqueue and return immediately (<1ms)
+                if (_queue != null)
                 {
-                    // Clear buffer on Ctrl+key combinations
-                    if (ctrl)
-                    {
-                        RustBridge.Clear();
-                    }
-                    return CallNextHookEx(_hookId, nCode, wParam, lParam);
+                    _queue.Enqueue(new KeyEvent(keyCode, shift, capsLock));
+                    return (IntPtr)1; // Block original key - worker will handle output
                 }
 
-                // Handle buffer-clearing keys (TAB, ESC only - Space and Enter go through IME)
-                // Note: Space and Enter must be processed by Rust core for auto-capitalize logic
-                if (keyCode == KeyCodes.VK_TAB || keyCode == KeyCodes.VK_ESCAPE)
-                {
-                    RustBridge.Clear();
-                    return CallNextHookEx(_hookId, nCode, wParam, lParam);
-                }
-
-                // Process the key through IME
+                // LEGACY MODE: Synchronous processing (deprecated)
+                #pragma warning disable CS0618 // Obsolete warning
                 var args = new KeyPressedEventArgs(keyCode, shift, capsLock);
-
-                try
-                {
-                    _isProcessing = true;
-                    KeyPressed?.Invoke(this, args);
-                }
-                finally
-                {
-                    _isProcessing = false;
-                }
-
-                // Block the original key if handled
+                KeyPressed?.Invoke(this, args);
                 if (args.Handled)
                 {
                     return (IntPtr)1;
                 }
+                #pragma warning restore CS0618
             }
         }
 
