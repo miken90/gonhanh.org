@@ -290,6 +290,8 @@ SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
 | **Word shortcut** | Send | N | expanded | `vn ` → `Việt Nam ` | same |
 | **W as ư (Telex)** | Send | 0 | ư | `w` → `ư`, `nhw` → `như` | N/A |
 
+**Phase 4 Bugfix (2025-12-30)**: Added passthrough via `TextSender.SendKey(vkCode, shift)` when `Action=None` or IME disabled. Prevents blocked keys with no output. Worker calls SendKey() for original keystroke when no transformation occurs.
+
 ### Global Hotkey Toggle
 
 ```csharp
@@ -345,18 +347,23 @@ Check if async mode (_queue != null):
    │  Dequeue event (blocks on AutoResetEvent)
    │       ↓
    │  ProcessKeyFromWorker(evt)
+   │       ├─ Check if disabled → SendKey(vkCode, shift) - passthrough
    │       ├─ RustBridge.ProcessKey()
    │       │  ├─ Translate Windows VK → macOS keycode
    │       │  ├─ Call ime_key(keycode, caps, shift)
    │       │  ├─ Receive ImeResult
    │       │  └─ Return (backspaceCount, chars) tuple
    │       ↓
-   │  If transformation:
+   │  If transformation (Action=Send/Restore):
    │       ├─ TextSender.SendText(text, backspaces)
    │       │  ├─ SendBackspaces (batch SendInput)
    │       │  ├─ Thread.Sleep(10-15ms) - DOESN'T block hook
    │       │  └─ SendUnicodeText (batch SendInput)
    │       └─ Output visible to user
+   │       ↓
+   │  Else (Action=None):
+   │       ├─ TextSender.SendKey(vkCode, shift) - passthrough
+   │       └─ Original keystroke sent
    │
    └─ NO (LEGACY MODE - deprecated):
       ├─ Call OnKeyPressed event (synchronous)

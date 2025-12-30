@@ -143,8 +143,12 @@ public partial class App : System.Windows.Application
     /// </summary>
     private void ProcessKeyFromWorker(KeyEvent evt)
     {
-        // Settings.IsEnabled is atomic bool read - safe for cross-thread access
-        if (!_settings.IsEnabled) return;
+        // If disabled, pass through original key
+        if (!_settings.IsEnabled)
+        {
+            TextSender.SendKey(evt.VirtualKeyCode, evt.Shift);
+            return;
+        }
 
         var result = RustBridge.ProcessKey(evt.VirtualKeyCode, evt.Shift, evt.CapsLock);
 
@@ -155,6 +159,11 @@ public partial class App : System.Windows.Application
         else if (result.Action == ImeAction.Restore)
         {
             TextSender.SendText(result.GetText(), result.Backspace);
+        }
+        else
+        {
+            // No transformation - send original key
+            TextSender.SendKey(evt.VirtualKeyCode, evt.Shift);
         }
     }
 

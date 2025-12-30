@@ -265,4 +265,82 @@ public static class TextSender
                 Thread.Sleep(delayMs);
         }
     }
+
+    /// <summary>
+    /// Send a single key press (for passthrough when no transformation).
+    /// Used by async worker when Rust core returns ImeAction.None.
+    /// </summary>
+    public static void SendKey(ushort vkCode, bool shift)
+    {
+        var marker = KeyboardHook.GetInjectedKeyMarker();
+        var inputs = new List<INPUT>();
+
+        // If shift needed and not already pressed, add shift down
+        if (shift)
+        {
+            inputs.Add(new INPUT
+            {
+                type = INPUT_KEYBOARD,
+                u = new INPUTUNION
+                {
+                    ki = new KEYBDINPUT
+                    {
+                        wVk = KeyCodes.VK_SHIFT,
+                        dwFlags = 0,
+                        dwExtraInfo = marker
+                    }
+                }
+            });
+        }
+
+        // Key down
+        inputs.Add(new INPUT
+        {
+            type = INPUT_KEYBOARD,
+            u = new INPUTUNION
+            {
+                ki = new KEYBDINPUT
+                {
+                    wVk = vkCode,
+                    dwFlags = 0,
+                    dwExtraInfo = marker
+                }
+            }
+        });
+
+        // Key up
+        inputs.Add(new INPUT
+        {
+            type = INPUT_KEYBOARD,
+            u = new INPUTUNION
+            {
+                ki = new KEYBDINPUT
+                {
+                    wVk = vkCode,
+                    dwFlags = KEYEVENTF_KEYUP,
+                    dwExtraInfo = marker
+                }
+            }
+        });
+
+        // Release shift if we pressed it
+        if (shift)
+        {
+            inputs.Add(new INPUT
+            {
+                type = INPUT_KEYBOARD,
+                u = new INPUTUNION
+                {
+                    ki = new KEYBDINPUT
+                    {
+                        wVk = KeyCodes.VK_SHIFT,
+                        dwFlags = KEYEVENTF_KEYUP,
+                        dwExtraInfo = marker
+                    }
+                }
+            });
+        }
+
+        SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<INPUT>());
+    }
 }
