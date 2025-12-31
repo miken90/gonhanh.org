@@ -16,11 +16,11 @@ public static class TextSender
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const uint KEYEVENTF_UNICODE = 0x0004;
 
-    // Delay settings (ms) for slow mode - optimized for low latency
-    private const int SlowModeKeyDelay = 1;     // Delay between chars (was 5)
-    private const int SlowModePreDelay = 5;     // Delay before text (was 20)
-    private const int SlowModePostDelay = 3;    // Delay after backspaces (was 15)
-    private const int FastModeDelay = 2;        // Delay between backspace and text (was 10)
+    // Delay settings (ms) for slow mode
+    private const int SlowModeKeyDelay = 5;     // Delay between chars
+    private const int SlowModePreDelay = 20;    // Delay before text
+    private const int SlowModePostDelay = 15;   // Delay after backspaces
+    private const int FastModeDelay = 10;       // Delay between backspace and text
 
     #endregion
 
@@ -264,83 +264,5 @@ public static class TextSender
             if (delayMs > 0)
                 Thread.Sleep(delayMs);
         }
-    }
-
-    /// <summary>
-    /// Send a single key press (for passthrough when no transformation).
-    /// Used by async worker when Rust core returns ImeAction.None.
-    /// </summary>
-    public static void SendKey(ushort vkCode, bool shift)
-    {
-        var marker = KeyboardHook.GetInjectedKeyMarker();
-        var inputs = new List<INPUT>();
-
-        // If shift needed and not already pressed, add shift down
-        if (shift)
-        {
-            inputs.Add(new INPUT
-            {
-                type = INPUT_KEYBOARD,
-                u = new INPUTUNION
-                {
-                    ki = new KEYBDINPUT
-                    {
-                        wVk = KeyCodes.VK_SHIFT,
-                        dwFlags = 0,
-                        dwExtraInfo = marker
-                    }
-                }
-            });
-        }
-
-        // Key down
-        inputs.Add(new INPUT
-        {
-            type = INPUT_KEYBOARD,
-            u = new INPUTUNION
-            {
-                ki = new KEYBDINPUT
-                {
-                    wVk = vkCode,
-                    dwFlags = 0,
-                    dwExtraInfo = marker
-                }
-            }
-        });
-
-        // Key up
-        inputs.Add(new INPUT
-        {
-            type = INPUT_KEYBOARD,
-            u = new INPUTUNION
-            {
-                ki = new KEYBDINPUT
-                {
-                    wVk = vkCode,
-                    dwFlags = KEYEVENTF_KEYUP,
-                    dwExtraInfo = marker
-                }
-            }
-        });
-
-        // Release shift if we pressed it
-        if (shift)
-        {
-            inputs.Add(new INPUT
-            {
-                type = INPUT_KEYBOARD,
-                u = new INPUTUNION
-                {
-                    ki = new KEYBDINPUT
-                    {
-                        wVk = KeyCodes.VK_SHIFT,
-                        dwFlags = KEYEVENTF_KEYUP,
-                        dwExtraInfo = marker
-                    }
-                }
-            });
-        }
-
-        SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<INPUT>());
     }
 }

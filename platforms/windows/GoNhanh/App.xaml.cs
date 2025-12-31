@@ -14,8 +14,6 @@ public partial class App : System.Windows.Application
 {
     private TrayIcon? _trayIcon;
     private KeyboardHook? _keyboardHook;
-    private KeyEventQueue? _keyQueue;      // Phase 2: Async queue for keyboard events
-    private KeyboardWorker? _keyWorker;    // Phase 2: Background processor
     private readonly SettingsService _settings = new();
     private readonly ShortcutsManager _shortcuts = new();
     private System.Threading.Mutex? _mutex;
@@ -46,19 +44,11 @@ public partial class App : System.Windows.Application
 
         ApplySettings();
 
-        // Initialize async keyboard processing (Phase 2 + 3)
-        _keyQueue = new KeyEventQueue();
-        _keyWorker = new KeyboardWorker(_keyQueue);
-        _keyWorker.OnKeyProcess = ProcessKeyFromWorker;
-
-        // Initialize keyboard hook with async queue (Phase 3)
+        // Initialize keyboard hook
         _keyboardHook = new KeyboardHook();
-        _keyboardHook.SetQueue(_keyQueue);  // Wire hook to queue
+        _keyboardHook.KeyPressed += OnKeyPressed;
         _keyboardHook.Hotkey = _settings.ToggleHotkey;
         _keyboardHook.OnHotkeyTriggered += OnHotkeyTriggered;
-
-        // Start worker before hook to ensure events are processed
-        _keyWorker.Start();
         _keyboardHook.Start();
 
         // Initialize system tray
@@ -112,12 +102,6 @@ public partial class App : System.Windows.Application
         }
     }
 
-    /// <summary>
-    /// DEPRECATED: Synchronous key processing (Phase 1-2 legacy).
-    /// Now replaced by ProcessKeyFromWorker() in async flow.
-    /// Kept for reference only.
-    /// </summary>
-    [Obsolete("Use ProcessKeyFromWorker() for async processing")]
     private void OnKeyPressed(object? sender, KeyPressedEventArgs e)
     {
         if (!_settings.IsEnabled) return;
@@ -133,37 +117,6 @@ public partial class App : System.Windows.Application
         {
             e.Handled = true;
             TextSender.SendText(result.GetText(), result.Backspace);
-        }
-    }
-
-    /// <summary>
-    /// Process key from worker thread (Phase 3 async flow).
-    /// Runs asynchronously - no blocking in hook callback.
-    /// Note: SendInput works from any thread - no UI thread requirement.
-    /// </summary>
-    private void ProcessKeyFromWorker(KeyEvent evt)
-    {
-        // If disabled, pass through original key
-        if (!_settings.IsEnabled)
-        {
-            TextSender.SendKey(evt.VirtualKeyCode, evt.Shift);
-            return;
-        }
-
-        var result = RustBridge.ProcessKey(evt.VirtualKeyCode, evt.Shift, evt.CapsLock);
-
-        if (result.Action == ImeAction.Send && result.Count > 0)
-        {
-            TextSender.SendText(result.GetText(), result.Backspace);
-        }
-        else if (result.Action == ImeAction.Restore)
-        {
-            TextSender.SendText(result.GetText(), result.Backspace);
-        }
-        else
-        {
-            // No transformation - send original key
-            TextSender.SendKey(evt.VirtualKeyCode, evt.Shift);
         }
     }
 
@@ -242,10 +195,6 @@ public partial class App : System.Windows.Application
 
     private void ExitApplication()
     {
-        // Stop worker first (before hook, to prevent new events)
-        _keyWorker?.Dispose();
-        _keyQueue?.Dispose();
-
         _keyboardHook?.Stop();
         _keyboardHook?.Dispose();
         _trayIcon?.Dispose();
@@ -256,8 +205,6 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _keyWorker?.Dispose();
-        _keyQueue?.Dispose();
         _keyboardHook?.Dispose();
         _trayIcon?.Dispose();
         _mutex?.Dispose();
