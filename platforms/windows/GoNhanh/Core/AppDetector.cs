@@ -26,7 +26,7 @@ public static class AppDetector
         "code", "vscode", "cursor", "obsidian", "figma",
         // Terminals
         "windowsterminal", "cmd", "powershell", "pwsh",
-        "wezterm", "alacritty", "hyper", "mintty",
+        "wezterm", "alacritty", "hyper", "mintty", "wave", "waveterm",
         // Browsers (use slow mode as safe default)
         "chrome", "msedge", "firefox", "brave", "opera", "vivaldi", "arc"
     };
