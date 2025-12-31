@@ -272,7 +272,7 @@ Dedicated background thread for processing keyboard events asynchronously.
 - `OnKeyProcess` callback - Set by App.xaml.cs to ProcessKeyFromWorker
 - `Start()` - Starts worker thread with AboveNormal priority
 - `Stop(timeoutMs)` - Graceful shutdown with timeout
-- `ProcessLoop()` - Main worker loop, runs on dedicated thread
+- `ProcessLoop()` - Main worker loop, runs on dedicated thread with 1ms timeout (optimized for low latency)
 - Error handling with catch-all, logs via Debug.WriteLine
 - Thread-safe disposal with Interlocked atomic exchange
 
@@ -282,9 +282,9 @@ SetWindowsHookEx for WH_KEYBOARD_LL hook. Includes global hotkey detection via O
 ### `Core/TextSender.cs` - Text Injection
 Unicode injection via SendInput API with KEYEVENTF_UNICODE. Batched delivery, preserves clipboard.
 
-**Modes**:
-- Fast: 10ms delay after backspaces
-- Slow: 15ms + 20ms + 5ms per char (Electron/terminals)
+**Modes** (optimized for low latency):
+- Fast: 2ms delay after backspaces
+- Slow: 3ms + 5ms + 1ms per char (Electron/terminals)
 
 ### `Services/SettingsService.cs` - Registry Persistence
 Registry path: `HKCU\SOFTWARE\GoNhanh`
@@ -423,13 +423,13 @@ RustBridge.cs (Windows)
 
 ---
 
-**Last Updated**: 2025-12-30
+**Last Updated**: 2025-12-31
 **Total Files**: 80+ files (Windows-only build)
 **Platform**: Windows 10/11 (.NET 8, WPF)
 **Coverage**: 100% of directories documented
 
-**Known Issues**:
-- Race condition with fast typing (Phase 2 worker thread complete, Phase 3 wiring pending)
+**Resolved Issues**:
+- ✅ Race condition with fast typing (Phase 4 complete - async queue + key passthrough)
 
 **Complete Features**:
 - ✅ 5 Advanced Settings
@@ -438,6 +438,7 @@ RustBridge.cs (Windows)
 - ✅ Global hotkey toggle (configurable)
 - ✅ Auto-start configuration
 - ✅ Unicode text injection (clipboard-safe)
+- ✅ Async queue keyboard processing (Phase 4 complete with key passthrough)
 
 ## Top 5 Largest Files by Token Count
 

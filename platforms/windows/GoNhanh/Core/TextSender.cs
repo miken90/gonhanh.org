@@ -16,11 +16,11 @@ public static class TextSender
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const uint KEYEVENTF_UNICODE = 0x0004;
 
-    // Delay settings (ms) for slow mode
-    private const int SlowModeKeyDelay = 5;     // Delay between chars
-    private const int SlowModePreDelay = 20;    // Delay before text
-    private const int SlowModePostDelay = 15;   // Delay after backspaces
-    private const int FastModeDelay = 10;       // Delay between backspace and text
+    // Delay settings (ms) for slow mode - optimized for low latency
+    private const int SlowModeKeyDelay = 1;     // Delay between chars (was 5)
+    private const int SlowModePreDelay = 5;     // Delay before text (was 20)
+    private const int SlowModePostDelay = 3;    // Delay after backspaces (was 15)
+    private const int FastModeDelay = 2;        // Delay between backspace and text (was 10)
 
     #endregion
 

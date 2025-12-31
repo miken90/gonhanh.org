@@ -68,8 +68,8 @@ public sealed class KeyboardWorker : IDisposable
         {
             try
             {
-                // TryDequeue blocks until item available or timeout (100ms)
-                if (_queue.TryDequeue(out var evt, timeoutMs: 100))
+                // TryDequeue blocks until item available or timeout (1ms for low latency)
+                if (_queue.TryDequeue(out var evt, timeoutMs: 1))
                 {
                     ProcessKey(evt);
                 }

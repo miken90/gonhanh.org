@@ -230,8 +230,8 @@ SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
 
 | Mode | Delay | Apps | Method |
 |------|-------|------|--------|
-| **Fast** | 10ms after backspace | Notepad, Word, standard apps | Batch SendInput |
-| **Slow** | 15ms + 20ms + 5ms/char | Electron, terminals, browsers | Character-by-character |
+| **Fast** | 2ms after backspace | Notepad, Word, standard apps | Batch SendInput |
+| **Slow** | 3ms + 5ms + 1ms/char | Electron, terminals, browsers | Character-by-character |
 
 ### App Detection (AppDetector.cs)
 
@@ -246,7 +246,7 @@ SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
 
 ### Keyboard Event Processing Architecture
 
-**Current State**: Async queue architecture COMPLETE (Phase 3 - hook wired to queue)
+**Current State**: Async queue architecture COMPLETE (Phase 4 - key passthrough added)
 
 **Components**:
 1. **KeyEvent struct** (`Core/KeyEventQueue.cs`)
@@ -265,16 +265,17 @@ SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
    - Dedicated background thread processor
    - AboveNormal priority for responsiveness
    - ProcessLoop with graceful shutdown (timeout-based)
+   - 1ms dequeue timeout for low latency processing
    - Error handling via catch-all with Debug.WriteLine
    - OnKeyProcess callback delegates to App.ProcessKeyFromWorker
 
 4. **KeyboardHook integration** (`Core/KeyboardHook.cs` + `App.xaml.cs`)
    - Hook.SetQueue(queue) wires hook to async queue
-   - HookCallback enqueues events in ASYNC MODE (lines 209-213)
-   - Legacy OnKeyPressed marked @Obsolete, kept for reference only
-   - Flow: Hook → Queue → Worker → ProcessKeyFromWorker → TextSender
+   - HookCallback enqueues events in ASYNC MODE
+   - Flow: Hook → Queue → Worker → ProcessKeyFromWorker → RustBridge/TextSender
+   - **Phase 4 addition**: Key passthrough via TextSender.SendKey() for Action=None
 
-**Migration complete**: Legacy synchronous path deprecated, async flow active
+**Migration complete**: Async flow fully operational, race condition FIXED
 
 ### Engine Result Cases
 
@@ -290,7 +291,7 @@ SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
 | **Word shortcut** | Send | N | expanded | `vn ` → `Việt Nam ` | same |
 | **W as ư (Telex)** | Send | 0 | ư | `w` → `ư`, `nhw` → `như` | N/A |
 
-**Phase 4 Bugfix (2025-12-30)**: Added passthrough via `TextSender.SendKey(vkCode, shift)` when `Action=None` or IME disabled. Prevents blocked keys with no output. Worker calls SendKey() for original keystroke when no transformation occurs.
+**Phase 4 Bugfix (2025-12-31)**: Added key passthrough via `TextSender.SendKey(vkCode, shift)` when `Action=None` or IME disabled. Prevents blocked keys with no output. Worker calls SendKey() for original keystroke when no transformation occurs.
 
 ### Global Hotkey Toggle
 
@@ -357,7 +358,7 @@ Check if async mode (_queue != null):
    │  If transformation (Action=Send/Restore):
    │       ├─ TextSender.SendText(text, backspaces)
    │       │  ├─ SendBackspaces (batch SendInput)
-   │       │  ├─ Thread.Sleep(10-15ms) - DOESN'T block hook
+   │       │  ├─ Thread.Sleep(2-3ms) - DOESN'T block hook (optimized)
    │       │  └─ SendUnicodeText (batch SendInput)
    │       └─ Output visible to user
    │       ↓
@@ -445,13 +446,13 @@ Check if async mode (_queue != null):
 
 ---
 
-**Last Updated**: 2025-12-30
+**Last Updated**: 2025-12-31
 **Architecture Version**: 2.1 (Windows-only)
 **Platform**: Windows 10/11 (.NET 8, WPF)
 **Diagram Format**: ASCII (compatible with all documentation viewers)
 
 **Resolved Issues**:
-- ✅ Race condition with fast typing (FIXED via async queue architecture Phase 3)
+- ✅ Race condition with fast typing (FIXED via async queue architecture Phase 4 complete)
 
 **Complete Features**:
 - ✅ 11 RustBridge FFI methods
@@ -461,4 +462,4 @@ Check if async mode (_queue != null):
 - ✅ Auto-start configuration
 - ✅ Unicode text injection (clipboard-safe)
 - ✅ Full Vietnamese input support (Telex/VNI)
-- ✅ Async queue keyboard processing (Phase 3 - race condition fixed)
+- ✅ Async queue keyboard processing (Phase 4 complete with key passthrough)
