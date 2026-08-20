@@ -6,6 +6,7 @@ package services
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -229,7 +230,11 @@ func (s *SettingsService) createScheduledTask() {
 		"/RL", "HIGHEST",
 		"/F")
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	cmd.Run()
+	if err := cmd.Run(); err != nil {
+		// Silently swallowing this used to mean a moved/renamed exe lost
+		// autostart with no trace. Log so it's diagnosable.
+		log.Printf("[Settings] schtasks /Create failed for %q: %v", exePath, err)
+	}
 }
 
 func (s *SettingsService) removeScheduledTask() {
@@ -237,7 +242,9 @@ func (s *SettingsService) removeScheduledTask() {
 		"/TN", AppName,
 		"/F")
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	cmd.Run()
+	if err := cmd.Run(); err != nil {
+		log.Printf("[Settings] schtasks /Delete failed: %v", err)
+	}
 }
 
 // ReconcileScheduledTaskPath updates the scheduled task exe path if it exists

@@ -133,7 +133,12 @@ func main() {
 	}
 
 	if settings.AutoStart && settings.RunAsAdmin && services.IsElevated() {
-		settingsSvc.ReconcileScheduledTaskPath()
+		// Off the boot path: this shells out to schtasks.exe, which has no
+		// business blocking typing-readiness. Only affects RunAsAdmin users.
+		go func() {
+			time.Sleep(3 * time.Second)
+			settingsSvc.ReconcileScheduledTaskPath()
+		}()
 	}
 
 	// Initialize formatting service
