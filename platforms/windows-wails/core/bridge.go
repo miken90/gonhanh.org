@@ -37,6 +37,36 @@ type ImeResult struct {
 	Chars     []rune
 }
 
+// cResult mirrors the Rust FFI struct byte-for-byte:
+//
+//	#[repr(C)]
+//	pub struct Result {
+//	    pub chars: [u32; MAX],  // MAX = 256, see core/src/engine/buffer.rs
+//	    pub action: u8,
+//	    pub backspace: u8,
+//	    pub count: u8,
+//	    pub flags: u8,
+//	}
+//
+// (core/src/engine/mod.rs, returned by ime_key_ext in core/src/lib.rs).
+// [256]uint32 + 4 bytes of u8 fields = 1028 bytes total, 4-byte aligned,
+// matching Go's layout for this field order exactly. flags exists in the
+// Rust struct (key-consumed bit) but was never read by the prior manual
+// byte-parsing either - preserved here as an unused trailing field so the
+// layout stays byte-identical rather than silently changing behavior.
+type cResult struct {
+	chars     [256]uint32
+	action    uint8
+	backspace uint8
+	count     uint8
+	flags     uint8
+}
+
+// Compile-time layout assertion: cResult must be exactly 1028 bytes, the
+// size the DLL actually allocates and frees via ime_free.
+var _ [1028 - unsafe.Sizeof(cResult{})]byte
+var _ [unsafe.Sizeof(cResult{}) - 1028]byte
+
 // GetText returns the result text as a string
 func (r ImeResult) GetText() string {
 	return string(r.Chars)
@@ -262,31 +292,21 @@ func (b *Bridge) ProcessKey(keycode uint16, capslock, ctrl, shift bool) ImeResul
 
 	defer b.pImeFree.Call(ptr)
 
-	// Parse native result structure
-	// struct { uint32[256] chars; uint8 action; uint8 backspace; uint8 count; uint8 flags; }
-	// Total size: 256*4 + 4 = 1028 bytes
-	data := (*[1028]byte)(unsafe.Pointer(ptr))
+	// Cast once to the typed struct matching the Rust FFI layout (see
+	// cResult's doc comment) instead of manually parsing a raw byte buffer.
+	result := (*cResult)(unsafe.Pointer(ptr))
 
-	action := ImeAction(data[1024])
-	backspace := data[1025]
-	count := data[1026]
-
-	chars := make([]rune, 0, count)
-	for i := uint8(0); i < count; i++ {
-		offset := int(i) * 4
-		charVal := uint32(data[offset]) |
-			uint32(data[offset+1])<<8 |
-			uint32(data[offset+2])<<16 |
-			uint32(data[offset+3])<<24
-		if charVal > 0 {
+	chars := make([]rune, 0, result.count)
+	for i := uint8(0); i < result.count; i++ {
+		if charVal := result.chars[i]; charVal > 0 {
 			chars = append(chars, rune(charVal))
 		}
 	}
 
 	return ImeResult{
-		Action:    action,
-		Backspace: backspace,
-		Count:     count,
+		Action:    ImeAction(result.action),
+		Backspace: result.backspace,
+		Count:     result.count,
 		Chars:     chars,
 	}
 }
@@ -389,115 +409,87 @@ const (
 	MAC_EQUAL     = 0x18
 )
 
-// TranslateToMacKeycode translates Windows Virtual Key code to macOS keycode
-// Returns 0xFFFF if key is not mapped
-func TranslateToMacKeycode(windowsVK uint16) uint16 {
-	switch windowsVK {
-	// Letters A-Z
-	case 0x41:
-		return MAC_A
-	case 0x42:
-		return MAC_B
-	case 0x43:
-		return MAC_C
-	case 0x44:
-		return MAC_D
-	case 0x45:
-		return MAC_E
-	case 0x46:
-		return MAC_F
-	case 0x47:
-		return MAC_G
-	case 0x48:
-		return MAC_H
-	case 0x49:
-		return MAC_I
-	case 0x4A:
-		return MAC_J
-	case 0x4B:
-		return MAC_K
-	case 0x4C:
-		return MAC_L
-	case 0x4D:
-		return MAC_M
-	case 0x4E:
-		return MAC_N
-	case 0x4F:
-		return MAC_O
-	case 0x50:
-		return MAC_P
-	case 0x51:
-		return MAC_Q
-	case 0x52:
-		return MAC_R
-	case 0x53:
-		return MAC_S
-	case 0x54:
-		return MAC_T
-	case 0x55:
-		return MAC_U
-	case 0x56:
-		return MAC_V
-	case 0x57:
-		return MAC_W
-	case 0x58:
-		return MAC_X
-	case 0x59:
-		return MAC_Y
-	case 0x5A:
-		return MAC_Z
-	// Numbers 0-9
-	case 0x30:
-		return MAC_N0
-	case 0x31:
-		return MAC_N1
-	case 0x32:
-		return MAC_N2
-	case 0x33:
-		return MAC_N3
-	case 0x34:
-		return MAC_N4
-	case 0x35:
-		return MAC_N5
-	case 0x36:
-		return MAC_N6
-	case 0x37:
-		return MAC_N7
-	case 0x38:
-		return MAC_N8
-	case 0x39:
-		return MAC_N9
-	// Special keys
-	case 0x08:
-		return MAC_DELETE // VK_BACK
-	case 0x09:
-		return MAC_TAB // VK_TAB
-	case 0x0D:
-		return MAC_RETURN // VK_RETURN
-	case 0x1B:
-		return MAC_ESC // VK_ESCAPE
-	case 0x20:
-		return MAC_SPACE // VK_SPACE
-	case 0xDB:
-		return MAC_LBRACKET // VK_OEM_4 ([{)
-	case 0xDD:
-		return MAC_RBRACKET // VK_OEM_6 (]})
-	// Punctuation
-	case 0xBE:
-		return MAC_DOT // VK_OEM_PERIOD
-	case 0xBC:
-		return MAC_COMMA // VK_OEM_COMMA
-	case 0xBF:
-		return MAC_SLASH // VK_OEM_2 (/)
-	case 0xBA:
-		return MAC_SEMICOLON // VK_OEM_1 (;)
-	case 0xDE:
-		return MAC_QUOTE // VK_OEM_7 (')
-	case 0xBD:
-		return MAC_MINUS // VK_OEM_MINUS
-	case 0xBB:
-		return MAC_EQUAL // VK_OEM_PLUS (=)
-	default:
-		return 0xFFFF
+// macKeycodeUnmapped is returned by TranslateToMacKeycode for any Windows VK
+// with no macOS keycode equivalent.
+const macKeycodeUnmapped uint16 = 0xFFFF
+
+// vkToMacKeycode is a Windows-VK -> macOS-keycode lookup table, indexed
+// directly by VK code (VK codes are single bytes, 0-255). Built once at
+// package init instead of a per-call switch statement.
+var vkToMacKeycode = buildVKToMacKeycodeTable()
+
+func buildVKToMacKeycodeTable() [256]uint16 {
+	var t [256]uint16
+	for i := range t {
+		t[i] = macKeycodeUnmapped
 	}
+
+	// Letters A-Z
+	t[0x41] = MAC_A
+	t[0x42] = MAC_B
+	t[0x43] = MAC_C
+	t[0x44] = MAC_D
+	t[0x45] = MAC_E
+	t[0x46] = MAC_F
+	t[0x47] = MAC_G
+	t[0x48] = MAC_H
+	t[0x49] = MAC_I
+	t[0x4A] = MAC_J
+	t[0x4B] = MAC_K
+	t[0x4C] = MAC_L
+	t[0x4D] = MAC_M
+	t[0x4E] = MAC_N
+	t[0x4F] = MAC_O
+	t[0x50] = MAC_P
+	t[0x51] = MAC_Q
+	t[0x52] = MAC_R
+	t[0x53] = MAC_S
+	t[0x54] = MAC_T
+	t[0x55] = MAC_U
+	t[0x56] = MAC_V
+	t[0x57] = MAC_W
+	t[0x58] = MAC_X
+	t[0x59] = MAC_Y
+	t[0x5A] = MAC_Z
+
+	// Numbers 0-9
+	t[0x30] = MAC_N0
+	t[0x31] = MAC_N1
+	t[0x32] = MAC_N2
+	t[0x33] = MAC_N3
+	t[0x34] = MAC_N4
+	t[0x35] = MAC_N5
+	t[0x36] = MAC_N6
+	t[0x37] = MAC_N7
+	t[0x38] = MAC_N8
+	t[0x39] = MAC_N9
+
+	// Special keys
+	t[0x08] = MAC_DELETE   // VK_BACK
+	t[0x09] = MAC_TAB      // VK_TAB
+	t[0x0D] = MAC_RETURN   // VK_RETURN
+	t[0x1B] = MAC_ESC      // VK_ESCAPE
+	t[0x20] = MAC_SPACE    // VK_SPACE
+	t[0xDB] = MAC_LBRACKET // VK_OEM_4 ([{)
+	t[0xDD] = MAC_RBRACKET // VK_OEM_6 (]})
+
+	// Punctuation
+	t[0xBE] = MAC_DOT       // VK_OEM_PERIOD
+	t[0xBC] = MAC_COMMA     // VK_OEM_COMMA
+	t[0xBF] = MAC_SLASH     // VK_OEM_2 (/)
+	t[0xBA] = MAC_SEMICOLON // VK_OEM_1 (;)
+	t[0xDE] = MAC_QUOTE     // VK_OEM_7 (')
+	t[0xBD] = MAC_MINUS     // VK_OEM_MINUS
+	t[0xBB] = MAC_EQUAL     // VK_OEM_PLUS (=)
+
+	return t
+}
+
+// TranslateToMacKeycode translates Windows Virtual Key code to macOS keycode.
+// Returns 0xFFFF if key is not mapped.
+func TranslateToMacKeycode(windowsVK uint16) uint16 {
+	if windowsVK >= uint16(len(vkToMacKeycode)) {
+		return macKeycodeUnmapped
+	}
+	return vkToMacKeycode[windowsVK]
 }
