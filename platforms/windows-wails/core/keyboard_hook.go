@@ -369,85 +369,12 @@ func (h *KeyboardHook) hookCallback(nCode int, wParam uintptr, lParam uintptr) u
 		}
 
 		// Check format hotkeys BEFORE toggle hotkey
-		// Need at least Ctrl or Alt modifier for format hotkeys
-		if ctrl || alt {
-			handler := GetFormatHandler()
-			if handler != nil && handler.IsEnabled() {
-				// Force fresh detection instead of using cached value
-				processName := DetectForegroundApp()
-				if processName == "" {
-					processName = GetCurrentProcessName()
-				}
-
-				// Step 1: Check CUSTOM hotkeys first (app-specific overrides)
-				customFormatType := handler.MatchesCustomHotkey(processName, keyCode, ctrl, alt, shift)
-				if customFormatType != "" {
-					profile := handler.GetProfileForApp(processName)
-					log.Printf("[FormatHotkey] CUSTOM key=0x%X formatType=%s process=%s profile=%s",
-						keyCode, customFormatType, processName, profile)
-					if profile != "disabled" {
-						goSafe(func() { handler.HandleFormatHotkey(customFormatType, profile) })
-						return 1 // Block key
-					}
-				}
-
-				// Step 2: Check GLOBAL custom hotkeys (user-defined replacements for defaults)
-				globalFormatType := handler.MatchesGlobalHotkey(keyCode, ctrl, alt, shift)
-				if globalFormatType != "" {
-					// Check if this hotkey is excluded for this app
-					if handler.IsHotkeyExcluded(processName, globalFormatType) {
-						log.Printf("[FormatHotkey] EXCLUDED key=0x%X formatType=%s process=%s", keyCode, globalFormatType, processName)
-						ret, _, _ := procCallNextHookEx.Call(h.hookID, uintptr(nCode), wParam, lParam)
-						return ret
-					}
-
-					profile := handler.GetProfileForApp(processName)
-					log.Printf("[FormatHotkey] GLOBAL key=0x%X formatType=%s process=%s profile=%s",
-						keyCode, globalFormatType, processName, profile)
-					if profile != "disabled" {
-						goSafe(func() { handler.HandleFormatHotkey(globalFormatType, profile) })
-						return 1 // Block key
-					}
-				}
-
-				// Step 3: Check DEFAULT hotkeys (Ctrl+B, Ctrl+I, Ctrl+Alt+S, etc.)
-				if ctrl {
-					if formatType, matched := IsFormatHotkey(keyCode, ctrl, alt, shift); matched {
-						// Check if this formatType has a global custom hotkey override
-						globalHotkey := handler.Service().GetGlobalHotkey(formatType)
-						if globalHotkey != "" {
-							// This formatType uses a custom global hotkey, skip default
-							ret, _, _ := procCallNextHookEx.Call(h.hookID, uintptr(nCode), wParam, lParam)
-							return ret
-						}
-
-						// Check if default hotkey has been overridden by a per-app custom one
-						customHotkey := handler.GetCustomHotkey(processName, formatType)
-						if customHotkey != "" {
-							// This formatType has a custom hotkey, skip default handling
-							// Let the key pass through
-							ret, _, _ := procCallNextHookEx.Call(h.hookID, uintptr(nCode), wParam, lParam)
-							return ret
-						}
-
-						// Check if this hotkey is excluded for this app
-						if handler.IsHotkeyExcluded(processName, formatType) {
-							log.Printf("[FormatHotkey] EXCLUDED key=0x%X formatType=%s process=%s", keyCode, formatType, processName)
-							// Don't return 1, let the key pass through to native app
-							ret, _, _ := procCallNextHookEx.Call(h.hookID, uintptr(nCode), wParam, lParam)
-							return ret
-						}
-
-						profile := handler.GetProfileForApp(processName)
-						log.Printf("[FormatHotkey] key=0x%X shift=%v formatType=%s process=%s profile=%s",
-							keyCode, shift, formatType, processName, profile)
-						if profile != "disabled" {
-							goSafe(func() { handler.HandleFormatHotkey(formatType, profile) })
-							return 1 // Block key
-						}
-					}
-				}
-			}
+		switch routeFormatHotkey(keyCode, ctrl, alt, shift) {
+		case formatHotkeyBlock:
+			return 1
+		case formatHotkeyPassThrough:
+			ret, _, _ := procCallNextHookEx.Call(h.hookID, uintptr(nCode), wParam, lParam)
+			return ret
 		}
 
 		// Check for toggle hotkey
