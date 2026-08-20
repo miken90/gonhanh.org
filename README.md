@@ -12,7 +12,7 @@
 
 <p align="center">
   <strong>Bộ gõ tiếng Việt miễn phí, nhanh, nhẹ cho Windows</strong><br>
-  ~5MB · Không cần cài đặt · Không quảng cáo · Không thu thập dữ liệu
+  ~11MB · Không cần cài đặt · Không quảng cáo · Không thu thập dữ liệu
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@
 
 | Tính năng | Mô tả |
 |-----------|-------|
-| ⚡ **Siêu nhẹ** | ~5MB portable, ~18MB RAM |
+| ⚡ **Siêu nhẹ** | ~11MB portable, ~18MB RAM |
 | 🔍 **Mọi ứng dụng** | Chrome, VS Code, Terminal, Discord, Slack... |
 | 🔤 **Auto-restore tiếng Anh** | `text` `expect` `user` → tự khôi phục khi nhấn Space |
 | ⎋ **ESC khôi phục** | Gõ sai → nhấn ESC → về lại chữ gốc |

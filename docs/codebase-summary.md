@@ -1,10 +1,10 @@
 # FKey Vietnamese IME — Codebase Summary
 
-> **Last updated:** 2026-07-28
+> **Last updated:** 2026-08-20
 
 ## 1. Project Overview
 
-FKey is a Vietnamese Input Method Editor (IME) for Windows, built as a two-layer system: a **Rust core engine** handling Vietnamese phonology, diacritics, tone placement, and spelling validation, and a **Go/Wails v3 Windows app** providing the system tray UI, low-level keyboard hook, and text injection via Win32 APIs. The entire application ships as a single ~5 MB executable with the Rust DLL embedded, zero runtime dependencies on the Rust side, and minimal Go dependencies.
+FKey is a Vietnamese Input Method Editor (IME) for Windows, built as a two-layer system: a **Rust core engine** handling Vietnamese phonology, diacritics, tone placement, and spelling validation, and a **Go/Wails v3 Windows app** providing the system tray UI, low-level keyboard hook, and text injection via Win32 APIs. The entire application ships as a single ~11 MB executable with the Rust DLL embedded, zero runtime dependencies on the Rust side, and minimal Go dependencies.
 
 ---
 
@@ -17,9 +17,16 @@ fkey/
 │   │   ├── lib.rs                     # FFI C-ABI exports (~916 lines)
 │   │   ├── utils.rs                   # String/char utilities (~522 lines)
 │   │   ├── engine/
-│   │   │   ├── mod.rs                 # Main Engine struct, keystroke processing (~8106 lines)
+│   │   │   ├── mod.rs                 # Engine struct, on_key pipeline (~2.0k lines)
+│   │   │   ├── auto_restore.rs        # English auto-restore logic (~3.2k lines)
+│   │   │   ├── modifiers.rs           # Tone/mark/stroke/remove dispatch (~2.5k lines)
+│   │   │   ├── tests_inline.rs        # Engine unit tests (~494 lines)
+│   │   │   ├── shortcut_flow.rs       # Word-boundary shortcut trigger (~57 lines)
+│   │   │   ├── rebuild.rs             # Buffer-range → output rendering (~70 lines)
+│   │   │   ├── helpers.rs             # Small shared free-function helpers (~53 lines)
+│   │   │   ├── capitalize.rs          # Auto-capitalize helpers (~52 lines)
 │   │   │   ├── buffer.rs              # Keystroke buffer management
-│   │   │   ├── shortcut.rs            # User-defined abbreviations (~897 lines)
+│   │   │   ├── shortcut.rs            # User-defined abbreviations (~966 lines)
 │   │   │   ├── syllable.rs            # Vietnamese syllable parsing
 │   │   │   ├── transform.rs           # Diacritic/tone transformation
 │   │   │   └── validation.rs          # Vietnamese spelling validation (~676 lines)
@@ -38,17 +45,25 @@ fkey/
 │   │   │   └── vni.rs                 # VNI input method
 │   │   └── updater/
 │   │       └── mod.rs                 # Version parsing
-│   ├── tests/                         # 24 test files, ~15k lines
+│   ├── tests/                         # 27 test files, ~15k lines
 │   └── Cargo.toml                     # Zero runtime dependencies
 │
 ├── platforms/
 │   └── windows-wails/                 # Windows app (Go + Wails v3)
 │       ├── main.go                    # App entry, tray menu, init
+│       ├── updater_ui.go              # Update-check background task + install dialog flow
 │       ├── bindings.go                # Frontend ↔ Go bindings
 │       ├── core/                      # Go wrapper for Rust DLL + Win32
 │       │   ├── smart_paste_test.go    # Mojibake fix unit tests
-│       │   ├── bridge.go              # Rust DLL FFI bridge
+│       │   ├── keyboard_hook_test.go  # Buffer-clear key class + consumed-map tests
+│       │   ├── hook_pump_test.go      # Dedicated hook thread lifecycle tests
+│       │   ├── bridge.go              # Rust DLL FFI bridge, VK→mac lookup table, typed FFI struct
 │       │   ├── keyboard_hook.go       # Win32 low-level keyboard hook
+│       │   ├── mouse_hook.go          # Win32 low-level mouse hook (buffer clear on click)
+│       │   ├── hook_pump.go           # Dedicated OS thread + message pump for both hooks
+│       │   ├── format_hotkey_router.go # 3-tier format-hotkey routing
+│       │   ├── startup_trace.go       # Per-stage boot timing log
+│       │   ├── debug_trace.go         # FKEY_DEBUG digit-path logging
 │       │   ├── ime_loop.go            # IME processing pipeline
 │       │   ├── text_sender.go         # SendInput Unicode text injection
 │       │   ├── app_detector.go        # App detection, injection profiles
@@ -64,7 +79,7 @@ fkey/
 │       │   └── formatting.go          # Formatting config (JSON)
 │       ├── frontend/                  # WebView2 UI (HTML/JS/CSS)
 │       ├── tests/
-│       │   └── fkey_test.go           # Go unit tests (27 tests)
+│       │   └── fkey_test.go           # Go unit tests
 │       ├── build.ps1                  # PowerShell build script
 │       ├── dll_embed.go               # Embeds Rust DLL into Go binary
 │       ├── icons.go                   # Runtime tray icon generation
@@ -88,7 +103,14 @@ fkey/
 | `lib.rs` | C-ABI FFI boundary | `process_key()`, `create_engine()`, `destroy_engine()` — exports consumed by Go via DLL |
 | `utils.rs` | String/char helpers | Unicode normalization, char classification, tone/mark detection |
 | **engine/** | | |
-| `engine/mod.rs` | Central Engine struct | `Engine`, `process_key()`, `handle_backspace()`, `reset()` — main keystroke pipeline |
+| `engine/mod.rs` | Central Engine struct | `Engine`, `on_key`/`on_key_ext` — main keystroke pipeline; delegates to the child modules below |
+| `engine/auto_restore.rs` | English auto-restore | `should_auto_restore`, `try_auto_restore_on_space/on_break`, `restore_to_raw`, `restore_word` |
+| `engine/modifiers.rs` | Modifier dispatch | `try_stroke`, `try_tone`, `try_mark`, `try_remove`, `try_w_as_vowel`, `try_bracket_as_vowel` |
+| `engine/tests_inline.rs` | Engine unit tests | Telex/VNI basic + ESC-restore test tables, moved out of `mod.rs` |
+| `engine/shortcut_flow.rs` | Shortcut trigger | `try_word_boundary_shortcut[_with_char]` |
+| `engine/rebuild.rs` | Output rendering | `rebuild_from`, `rebuild_from_after_insert` |
+| `engine/helpers.rs` | Shared free functions | `break_key_to_char` |
+| `engine/capitalize.rs` | Auto-capitalize | `is_sentence_ending_punctuation`, `should_reset_pending_capitalize`, `set_auto_capitalize` |
 | `engine/buffer.rs` | Keystroke buffer | Tracks raw input, composed output, cursor position |
 | `engine/shortcut.rs` | Abbreviation expansion | User-defined shortcuts, trigger condition matching |
 | `engine/syllable.rs` | Syllable parsing | Splits Vietnamese words into onset/nucleus/coda/tone components |
@@ -110,10 +132,16 @@ fkey/
 | Module | Purpose | Key Types / Functions |
 |--------|---------|----------------------|
 | `main.go` | App entry | Wails app init, system tray menu, window management |
+| `updater_ui.go` | Updater dialog flow | `checkForUpdatesBackground`, `performAutoUpdate` — split out of `main.go` |
 | `bindings.go` | JS ↔ Go bridge | `SettingsService`, `FormattingService` — methods callable from frontend |
 | **core/** | | |
-| `core/bridge.go` | Rust FFI | `ProcessKey()`, `NewEngine()` — Go wrappers around `gonhanh_core.dll` |
-| `core/keyboard_hook.go` | Keyboard hook | Win32 `SetWindowsHookEx(WH_KEYBOARD_LL)`, key event dispatch, panic recovery, `goSafe()` helper |
+| `core/bridge.go` | Rust FFI | `ProcessKey()`, `NewEngine()`, `TranslateToMacKeycode()` (table-driven) — Go wrappers around `gonhanh_core.dll` |
+| `core/keyboard_hook.go` | Keyboard hook | Win32 `SetWindowsHookEx(WH_KEYBOARD_LL)`, key event dispatch, panic recovery, `goSafe()` helper, `IsBufferClearKey()` nav/F-key/numpad class |
+| `core/mouse_hook.go` | Mouse hook | Win32 `SetWindowsHookEx(WH_MOUSE_LL)` — clears IME buffer on button-down |
+| `core/hook_pump.go` | Dedicated hook thread | `runtime.LockOSThread()` + `GetMessageW` pump so the hooks are serviced independently of Wails' main thread |
+| `core/format_hotkey_router.go` | Format hotkey routing | `routeFormatHotkey()` — custom/global/default 3-tier matching |
+| `core/startup_trace.go` | Boot timing | Appends per-stage timing to `startup.log` |
+| `core/debug_trace.go` | Digit-path debug log | `FKEY_DEBUG=1`-gated, ring buffer of recent buffer-clear-class keys |
 | `core/ime_loop.go` | IME pipeline | Goroutine processing keystroke → engine → text output, smart profile cache invalidation |
 | `core/text_sender.go` | Text injection | `SendInput()` Unicode injection, backspace simulation |
 | `core/app_detector.go` | App profiles | Detects foreground app, selects injection strategy, window-aware smart profile cache (`GetSmartAppProfile()`) |
@@ -136,7 +164,9 @@ fkey/
 
 | File | Why It Matters |
 |------|----------------|
-| `core/src/engine/mod.rs` | **The heart** — 8k lines of keystroke processing, tone/mark logic, undo, English detection |
+| `core/src/engine/mod.rs` | **The heart** — `Engine` struct and its `on_key` pipeline (~2k lines); delegates tone/mark logic, auto-restore, and rebuild to the child modules listed in the module map above |
+| `core/src/engine/auto_restore.rs` | English auto-restore and undo-to-raw-ASCII logic (largest single file in the engine) |
+| `core/src/engine/modifiers.rs` | Tone/mark/stroke modifier dispatch — where a keystroke becomes a diacritic |
 | `core/src/engine/transform.rs` | How diacritics and tones are applied to characters |
 | `core/src/engine/validation.rs` | Vietnamese spelling rules that determine valid output |
 | `core/src/engine/syllable.rs` | How input is parsed into Vietnamese syllable components |
@@ -160,9 +190,12 @@ fkey/
 | `core/tests/integration_test.rs` | Full typing sequences (~3697 lines) |
 | `core/tests/bug_reports_test.rs` | Regression tests from user reports (~1923 lines) |
 | `core/tests/english_auto_restore_test.rs` | English word detection (~1421 lines) |
+| `core/tests/digit_bug_fixes_test.rs` | VNI/Telex digit-modifier regression coverage (markable-context gate, shift+digit, o2o) |
 | `core/tests/typing_test.rs` | Keystroke-by-keystroke typing simulation |
-| `platforms/windows-wails/tests/fkey_test.go` | Go unit tests (31 tests, ~780 lines) |
+| `platforms/windows-wails/tests/fkey_test.go` | Go unit tests (31 tests) |
 | `platforms/windows-wails/core/smart_paste_test.go` | Mojibake detection/fix unit tests (3 tests) |
+| `platforms/windows-wails/core/keyboard_hook_test.go` | Buffer-clear key class + consumed-map reset tests (2 tests) |
+| `platforms/windows-wails/core/hook_pump_test.go` | Dedicated hook thread start/stop lifecycle tests (3 tests) |
 
 ---
 
@@ -170,16 +203,16 @@ fkey/
 
 | Metric | Value |
 |--------|-------|
-| Rust core `src/` LOC | ~24.5k (engine/mod.rs ~8.1k, data tables ~14k) |
-| Go platform LOC (excl. tests) | ~6.2k |
-| Rust test LOC | ~19k |
-| Go test LOC | ~900 |
-| Rust test files | 23 |
-| Go test files | 2 (`tests/fkey_test.go`, `core/smart_paste_test.go`) |
-| Go test count | 34 (31 + 3) |
+| Rust core `src/` LOC | ~24.9k (engine/ ~11.0k across mod.rs + 7 child modules, data tables ~14k) |
+| Go platform LOC (excl. tests) | ~7.0k |
+| Rust test LOC | ~20k |
+| Go test LOC | ~1.1k |
+| Rust test files | 27 test binaries + 1 shared `common/mod.rs` helper |
+| Go test files | 4 (`tests/fkey_test.go`, `core/smart_paste_test.go`, `core/keyboard_hook_test.go`, `core/hook_pump_test.go`) |
+| Go test count | 39 (31 + 3 + 2 + 3) |
 | Runtime dependencies (Rust) | 0 |
 | Runtime dependencies (Go) | Wails v3, golang.org/x/sys |
-| Final binary size | ~5 MB (single .exe, DLL embedded) |
+| Final binary size | ~11 MB (single .exe, DLL embedded) |
 | Current version | See `VERSION` file |
 
 ---

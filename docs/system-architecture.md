@@ -56,9 +56,17 @@ The engine is a pure Rust library with **zero runtime dependencies**. It compile
 
 ### Key Modules
 
+`engine/mod.rs` holds only the `Engine` struct and its `on_key`/`on_key_ext` processing pipeline (~2k lines); everything else that used to live in one file is split into focused child modules. Child modules can read `Engine`'s private fields (Rust visibility flows down the module tree), so the split is purely organizational — no field or behavior changes.
+
 | Module | File | Purpose |
 |--------|------|---------|
-| **Engine** | `engine/mod.rs` | Main `Engine` struct, `on_key()` processing pipeline |
+| **Engine** | `engine/mod.rs` | `Engine` struct, `on_key`/`on_key_ext` dispatch, phonology-query helpers (`collect_vowels`, `has_final_consonant`, etc.) |
+| **Capitalize** | `engine/capitalize.rs` | Sentence-ending-punctuation detection, `pending_capitalize` reset rules, `set_auto_capitalize` |
+| **Helpers** | `engine/helpers.rs` | Small free-function helpers shared across the pipeline (e.g. break-key → character) |
+| **Shortcut flow** | `engine/shortcut_flow.rs` | Word-boundary shortcut trigger logic (space/punctuation-triggered expansion) |
+| **Auto-restore** | `engine/auto_restore.rs` | English auto-restore: detects when a transformed buffer is actually an English word typed through and restores the raw ASCII (largest child module — the bulk of the file's logic) |
+| **Modifiers** | `engine/modifiers.rs` | Tone/mark/stroke/remove modifier dispatch (`try_stroke`, `try_tone`, `try_mark`, `try_remove`, `try_w_as_vowel`, `try_bracket_as_vowel`) and their gate/revert helpers |
+| **Rebuild** | `engine/rebuild.rs` | Renders a buffer range back to backspace-count + replacement chars for the platform layer |
 | **Buffer** | `engine/buffer.rs` | Fixed-size keystroke buffer (`MAX=256`), no heap alloc per keystroke |
 | **Shortcut** | `engine/shortcut.rs` | User abbreviations with trigger conditions (Immediate/OnWordBoundary) |
 | **Syllable** | `engine/syllable.rs` | Vietnamese syllable parsing and decomposition |
@@ -69,6 +77,8 @@ The engine is a pure Rust library with **zero runtime dependencies**. It compile
 | **Input** | `input/telex.rs`, `input/vni.rs` | Input method keystroke-to-diacritic mappings |
 | **Dictionary** | `data/dictionary.rs` | Vietnamese word validation via HashSet (~0.5MB), keep list |
 | **English Dict** | `data/english_dict.rs` | 100k English words for auto-restore feature |
+
+**VNI digit modifier gating**: a VNI digit (1-9, 0 — mark/tone/stroke/remove are all digit-driven in VNI) only acts as a modifier when the buffer's last character is a letter, i.e. it's continuing an in-progress syllable. If the buffer is empty or already ends in a digit/symbol, the digit passes through as a literal instead of hunting an earlier vowel elsewhere in the buffer. This prevents plain numeric input (or a stale buffer left over from an untracked key on the Go side) from being misread as a tone/mark command. Intentional modifiers like `a1` (á) or `o6` (ô) are unaffected, since the buffer always ends in the letter just typed at the moment the digit arrives.
 
 ### FFI Interface (`lib.rs`)
 
@@ -106,6 +116,8 @@ struct Result {
 };
 ```
 
+On the Go side, `bridge.go` mirrors this exact layout as a typed `cResult` struct (`chars [256]uint32; action, backspace, count, flags uint8`) cast once via `unsafe.Pointer`, with a compile-time size assertion pinning it to 1028 bytes (256×4 + 4) — instead of manually indexing into a raw `[1028]byte`. `flags` is present for layout correctness but not currently read by the Go side.
+
 ---
 
 ## Windows Platform (`platforms/windows-wails/`)
@@ -116,14 +128,29 @@ Go application using Wails v3 framework with WebView2 for the settings UI.
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| **Bridge** | `core/bridge.go` | FFI to Rust DLL via `syscall.LoadDLL`. Translates Windows VK → macOS keycodes |
-| **Keyboard Hook** | `core/keyboard_hook.go` | Win32 `WH_KEYBOARD_LL` low-level hook. System-wide keystroke interception. Panic recovery prevents crashes under resource pressure |
+| **Bridge** | `core/bridge.go` | FFI to Rust DLL via `syscall.LoadDLL`. Translates Windows VK → macOS keycodes via a `[256]uint16` lookup table built once at package init |
+| **Keyboard Hook** | `core/keyboard_hook.go` | Win32 `WH_KEYBOARD_LL` low-level hook. System-wide keystroke interception. Panic recovery prevents crashes under resource pressure. Buffer-clear key class (nav/PgUp-PgDn/Home-End/Insert/Delete/F-keys/numpad) and a held-Win-key check both clear the IME buffer and pass the key through, since neither class ever reaches the engine otherwise |
+| **Mouse Hook** | `core/mouse_hook.go` | Win32 `WH_MOUSE_LL` low-level hook. Clears the IME buffer on left/right/middle button-down, since a click can move the caret without any key event |
+| **Hook Pump** | `core/hook_pump.go` | Runs the keyboard and mouse hooks on a dedicated, locked OS thread with its own `GetMessageW` message pump — see "Dedicated Hook Thread" below |
+| **Format Hotkey Router** | `core/format_hotkey_router.go` | 3-tier format-hotkey routing (custom per-app → global custom → default) called from the keyboard hook |
+| **Startup Trace** | `core/startup_trace.go` | Per-stage boot timing, appended to `%LOCALAPPDATA%\FKey\startup.log`, for diagnosing startup delay |
+| **Debug Trace** | `core/debug_trace.go` | `FKEY_DEBUG=1`-gated digit-path debug logging with a ring buffer of recently-seen buffer-clear-class keys, for diagnosing IME buffer desync |
 | **IME Loop** | `core/ime_loop.go` | Orchestrates hook → engine → injection pipeline. Invalidates smart profile cache on app switch |
 | **Text Sender** | `core/text_sender.go` | `SendInput` API text injection with multiple methods |
 | **App Detector** | `core/app_detector.go` | Detects foreground process, selects injection profile. Window-aware smart profile cache avoids per-keystroke process tree scans |
 | **Coalescer** | `core/coalescer.go` | Batches rapid keystrokes for flicker-free injection |
 | **Smart Paste** | `core/smart_paste.go` | Ctrl+Shift+V mojibake detection and fix |
 | **Elevation** | `core/elevation.go` | UAC elevation/de-elevation via `ShellExecute` |
+
+### Dedicated Hook Thread
+
+The keyboard and mouse hooks run on their own OS thread (`hook_pump.go`), not on Wails' main thread. A `WH_KEYBOARD_LL`/`WH_MOUSE_LL` hook is only delivered to, and must be pumped by, the thread that installed it — a thread that stops pumping stalls system-wide keyboard input, and Windows silently removes hooks that don't respond within `LowLevelHooksTimeout`. The dedicated thread:
+
+1. Calls `runtime.LockOSThread()` and never unlocks — the thread lives exactly as long as the hooks do, and terminates when the goroutine returns rather than being reused.
+2. Installs both hooks, then runs a `GetMessageW`/`TranslateMessage`/`DispatchMessageW` loop to keep them serviced.
+3. Shuts down when `PostThreadMessageW` posts `WM_QUIT` to it; on wakeup it unhooks both hooks on that same thread before the goroutine returns.
+
+This thread is started in `main.go` right after IME-loop creation — **before** `application.New()` — so typing works while Wails is still initializing the tray, window, and WebView2. Because the toggle hotkey can now fire from this thread before Wails exists at all, `OnEnabledChanged`'s UI-touching work is nil-guarded on `globalApp` and marshaled onto the Wails main thread via `application.InvokeAsync`; calling it before `application.New()` returns would panic inside Wails.
 
 ### Services
 
@@ -139,6 +166,7 @@ Go application using Wails v3 framework with WebView2 for the settings UI.
 - `frontend/assets/app.js` — Application logic, Wails binding calls
 - `frontend/assets/app.css` — Styling
 - `bindings.go` — `AppBindings` struct exposes Go methods to JavaScript
+- `updater_ui.go` — Update-check background task and the download/install/relaunch dialog flow (package `main`, split out of `main.go` to keep it focused on process startup)
 
 ---
 
@@ -265,6 +293,8 @@ The keyboard hook callback (`WH_KEYBOARD_LL`) must return quickly — Windows si
 2. **Panic Recovery** (`keyboard_hook.go`): `hookCallback` wraps its body in `defer recover()` so that panics from FFI calls, `unsafe.Pointer` operations, or Win32 API calls under memory pressure don't crash the process — the key simply passes through.
 
 3. **goSafe() Helper** (`keyboard_hook.go`): Goroutines spawned from the hook callback (SmartPaste, FormatHotkey handlers) use `goSafe()` which wraps the function in a goroutine with its own `defer recover()`, preventing unrecovered panics from killing the process.
+
+4. **Dedicated Pumping Thread** (`hook_pump.go`): the hooks are installed on and pumped by their own OS thread rather than relying on Wails' main-thread message loop (which historically only started pumping once `app.Run()` was reached) — see "Dedicated Hook Thread" above.
 
 ---
 
