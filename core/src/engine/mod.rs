@@ -1358,6 +1358,19 @@ impl Engine {
         // User wants the symbol (@ for Shift+2, # for Shift+3, etc.), not VNI marks
         let skip_vni_modifiers = self.method == 1 && shift && keys::is_number(key);
 
+        // B1 fix: a VNI digit (1-9, 0) is a stroke/tone/mark/remove modifier only
+        // when it continues an in-progress syllable, i.e. the buffer's last char
+        // is a letter. If the buffer is empty or already ends in a digit/symbol
+        // (plain numeric input like "abc123", or a stale buffer left over from an
+        // untracked key such as an arrow/nav press), there is nothing markable to
+        // attach to - the digit must pass through as a literal instead of hunting
+        // an earlier vowel in the buffer. Intentional modifiers like "a1" (a+sắc)
+        // or "o6" (o+circumflex) are unaffected since the buffer ends in the
+        // letter that was just typed.
+        let vni_digit_non_markable = self.method == 1
+            && keys::is_number(key)
+            && !self.buf.last().is_some_and(|c| keys::is_letter(c.key));
+
         // Skip modifiers after circumflex revert (ooo→oo, eee→ee, aaa→aa)
         // Example: "booo" → "boo" (revert), then "s" → "boos" (not "boós")
         // Example: "seee" → "see" (revert), then "m" → "seem" (not "seém")
@@ -1371,14 +1384,14 @@ impl Engine {
         // Check modifiers by scanning buffer for patterns
 
         // 1. Stroke modifier (d → đ)
-        if !skip_vni_modifiers && m.stroke(key) {
+        if !skip_vni_modifiers && !vni_digit_non_markable && m.stroke(key) {
             if let Some(result) = self.try_stroke(key, caps) {
                 return result;
             }
         }
 
         // 2. Tone modifier (circumflex, horn, breve)
-        if !skip_vni_modifiers && !skip_after_revert {
+        if !skip_vni_modifiers && !vni_digit_non_markable && !skip_after_revert {
             if let Some(tone_type) = m.tone(key) {
                 let targets = m.tone_targets(key);
                 if let Some(result) = self.try_tone(key, caps, tone_type, targets) {
@@ -1388,7 +1401,7 @@ impl Engine {
         }
 
         // 3. Mark modifier
-        if !skip_vni_modifiers && !skip_after_revert {
+        if !skip_vni_modifiers && !vni_digit_non_markable && !skip_after_revert {
             if let Some(mark_val) = m.mark(key) {
                 if let Some(result) = self.try_mark(key, caps, mark_val) {
                     return result;
@@ -1399,7 +1412,7 @@ impl Engine {
         // 4. Remove modifier
         // Only consume key if there's something to remove; otherwise fall through to normal letter
         // This allows shortcuts like "zz" to work when buffer has no marks/tones to remove
-        if !skip_vni_modifiers && m.remove(key) {
+        if !skip_vni_modifiers && !vni_digit_non_markable && m.remove(key) {
             if let Some(result) = self.try_remove() {
                 return result;
             }
@@ -4018,8 +4031,13 @@ impl Engine {
                     // Buffer now has: ...ă (at breve_pos) + consonant (just added)
                     // Screen has: ...aw (need to delete "aw", output "ă" + consonant)
                     let vowel_char = chars::to_char(keys::A, a_caps, tone::HORN, 0).unwrap_or('ă');
-                    let cons_char = crate::utils::key_to_char(key, caps).unwrap_or('?');
-                    return Result::send(2, &[vowel_char, cons_char]); // backspace 2 ("aw"), output "ăm"
+                    // Skip the consonant char entirely if it has no mapping, rather
+                    // than emitting a literal '?' the user never typed.
+                    let mut out_chars = vec![vowel_char];
+                    if let Some(cons_char) = crate::utils::key_to_char(key, caps) {
+                        out_chars.push(cons_char);
+                    }
+                    return Result::send(2, &out_chars); // backspace 2 ("aw"), output "ăm"
                 } else if key == keys::W {
                     // 'w' is the breve modifier - don't clear pending_breve_pos
                     // It will be added as a regular letter and removed later
