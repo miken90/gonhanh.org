@@ -10,7 +10,9 @@
 //! 3. **Shortcut Support**: User-defined abbreviations with priority
 //! 4. **Longest-Match-First**: For diacritic placement
 
+mod capitalize;
 pub mod buffer;
+mod helpers;
 pub mod shortcut;
 pub mod syllable;
 pub mod transform;
@@ -24,6 +26,8 @@ use crate::data::{
 use crate::input::{self, ToneType};
 use crate::utils;
 use buffer::{Buffer, Char, MAX};
+use capitalize::{is_sentence_ending_punctuation, should_reset_pending_capitalize};
+use helpers::break_key_to_char;
 use shortcut::{InputMethod, ShortcutTable};
 use validation::{
     is_foreign_word_pattern, is_valid, is_valid_for_transform_with_foreign, is_valid_with_foreign,
@@ -161,91 +165,6 @@ impl WordHistory {
     fn clear(&mut self) {
         self.len = 0;
         self.head = 0;
-    }
-}
-
-/// Check if key is sentence-ending punctuation (. ! ?) but NOT Enter
-/// Issue #185: Only set pending_capitalize after punctuation + space
-#[inline]
-fn is_sentence_ending_punctuation(key: u16, shift: bool) -> bool {
-    key == keys::DOT
-        || (shift && key == keys::N1) // !
-        || (shift && key == keys::SLASH) // ?
-}
-
-/// Check if a break key should reset pending_capitalize
-/// Neutral keys like quotes, parentheses, arrows should NOT reset (preserve pending)
-/// Word-breaking keys like comma should reset
-#[inline]
-fn should_reset_pending_capitalize(key: u16, shift: bool) -> bool {
-    // These neutral characters/keys should NOT reset pending_capitalize:
-    // - Quotes: ' " (QUOTE with/without shift)
-    // - Parentheses: ( ) (Shift+9, Shift+0)
-    // - Brackets: [ ] { } (LBRACKET, RBRACKET with/without shift)
-    // - Arrow keys: navigation shouldn't reset pending state
-    // - Tab, ESC: navigation/cancel shouldn't reset pending state
-    let is_neutral = key == keys::QUOTE
-        || key == keys::LBRACKET
-        || key == keys::RBRACKET
-        || (shift && key == keys::N9)  // (
-        || (shift && key == keys::N0)  // )
-        || key == keys::LEFT
-        || key == keys::RIGHT
-        || key == keys::UP
-        || key == keys::DOWN
-        || key == keys::TAB
-        || key == keys::ESC;
-
-    // Reset for all other break keys (comma, semicolon, etc.)
-    !is_neutral
-}
-
-/// Convert break key to its character representation
-/// Handles both shifted and unshifted break characters for shortcut matching.
-/// Examples: MINUS → '-', Shift+DOT → '>', Shift+MINUS → '_'
-fn break_key_to_char(key: u16, shift: bool) -> Option<char> {
-    if shift {
-        // Shifted break characters
-        match key {
-            keys::N1 => Some('!'),
-            keys::N2 => Some('@'),
-            keys::N3 => Some('#'),
-            keys::N4 => Some('$'),
-            keys::N5 => Some('%'),
-            keys::N6 => Some('^'),
-            keys::N7 => Some('&'),
-            keys::N8 => Some('*'),
-            keys::N9 => Some('('),
-            keys::N0 => Some(')'),
-            keys::MINUS => Some('_'),
-            keys::EQUAL => Some('+'),
-            keys::SEMICOLON => Some(':'),
-            keys::QUOTE => Some('"'),
-            keys::COMMA => Some('<'),
-            keys::DOT => Some('>'),
-            keys::SLASH => Some('?'),
-            keys::BACKSLASH => Some('|'),
-            keys::LBRACKET => Some('{'),
-            keys::RBRACKET => Some('}'),
-            keys::BACKQUOTE => Some('~'),
-            _ => None,
-        }
-    } else {
-        // Unshifted break characters
-        match key {
-            keys::MINUS => Some('-'),
-            keys::EQUAL => Some('='),
-            keys::SEMICOLON => Some(';'),
-            keys::QUOTE => Some('\''),
-            keys::COMMA => Some(','),
-            keys::DOT => Some('.'),
-            keys::SLASH => Some('/'),
-            keys::BACKSLASH => Some('\\'),
-            keys::LBRACKET => Some('['),
-            keys::RBRACKET => Some(']'),
-            keys::BACKQUOTE => Some('`'),
-            _ => None,
-        }
     }
 }
 
@@ -449,15 +368,6 @@ impl Engine {
     /// Set whether to enable English auto-restore (experimental)
     pub fn set_english_auto_restore(&mut self, enabled: bool) {
         self.english_auto_restore = enabled;
-    }
-
-    /// Set whether to enable auto-capitalize after sentence-ending punctuation
-    pub fn set_auto_capitalize(&mut self, enabled: bool) {
-        self.auto_capitalize = enabled;
-        if !enabled {
-            self.pending_capitalize = false;
-            self.saw_sentence_ending = false;
-        }
     }
 
     /// Set whether to allow foreign consonants (z, w, j, f) as valid initials
