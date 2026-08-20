@@ -5,7 +5,6 @@ package core
 
 import (
 	"fmt"
-	"log"
 	"sync"
 )
 
@@ -13,6 +12,7 @@ import (
 type ImeLoop struct {
 	hook      *KeyboardHook
 	mouseHook *MouseHook
+	pump      *hookPump
 	bridge    *Bridge
 	settings  *ImeSettings
 	coalescer *Coalescer
@@ -65,6 +65,7 @@ func NewImeLoop() (*ImeLoop, error) {
 	loop := &ImeLoop{
 		hook:      hook,
 		mouseHook: mouseHook,
+		pump:      newHookPump(hook, mouseHook),
 		bridge:    bridge,
 		settings:  settings,
 	}
@@ -107,16 +108,14 @@ func (l *ImeLoop) Start() error {
 	l.bridge.Initialize()
 	l.applySettings()
 
-	// Start keyboard hook
-	if err := l.hook.Start(); err != nil {
+	// Install the keyboard/mouse hooks on a dedicated, locked OS thread with
+	// its own message pump (see hook_pump.go). This must not run on the
+	// goroutine that will later call application.New()/app.Run() - it needs
+	// to keep pumping independently so typing works while Wails is still
+	// initializing, and a LL hook's installing thread must itself be the
+	// one pumping or Windows silently removes the hook.
+	if err := l.pump.start(); err != nil {
 		return err
-	}
-
-	// Start mouse hook (H0 companion fix). Not fatal if it fails - typing
-	// still works via the keyboard hook alone, just without the click-clears-
-	// buffer safety net - so log and continue rather than aborting startup.
-	if err := l.mouseHook.Start(); err != nil {
-		log.Printf("[ImeLoop] failed to start mouse hook: %v", err)
 	}
 
 	l.running = true
@@ -132,8 +131,7 @@ func (l *ImeLoop) Stop() {
 		return
 	}
 
-	l.hook.Stop()
-	l.mouseHook.Stop()
+	l.pump.stop()
 	l.running = false
 }
 

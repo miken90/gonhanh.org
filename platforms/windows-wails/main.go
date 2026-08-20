@@ -161,6 +161,37 @@ func main() {
 	// Initialize format handler for text formatting feature
 	core.InitFormatHandler(formattingSvc)
 
+	// Status callback - called when hotkey toggles IME. Wired before Start()
+	// since the hook thread (started below) can invoke this the instant a
+	// user presses the toggle hotkey - before Wails (globalApp/globalTray/
+	// globalMenu) exists yet. updateUI is marshaled onto the Wails main
+	// thread and nil-guarded for exactly that reason; PlayBeep is a plain
+	// Win32 call with no GUI-thread affinity, safe to run directly here.
+	globalImeLoop.OnEnabledChanged = func(enabled bool) {
+		core.PlayBeep(enabled)
+
+		if globalApp == nil {
+			// Hotkey pressed before application.New() returned - nothing to
+			// marshal UI work onto yet (dispatching now would panic inside
+			// Wails: "initMainLoop was not called"). Safe to skip; the tray
+			// icon/menu will simply reflect the new state once updateUI
+			// runs from the next toggle after Wails finishes starting.
+			return
+		}
+		application.InvokeAsync(func() {
+			updateUI(enabled)
+		})
+	}
+
+	// Start the keyboard/mouse hooks on their own dedicated, pumping OS
+	// thread NOW - before Wails initializes - so typing works while the
+	// webview/tray/window are still being set up. This must run
+	// independently of app.Run()'s message loop; see hook_pump.go.
+	if err := globalImeLoop.Start(); err != nil {
+		log.Fatalf("Failed to start IME loop: %v", err)
+	}
+	core.StartupTraceStage("hook-start")
+
 	// Create App bindings
 	appBindings := NewAppBindings(globalImeLoop, settingsSvc, formattingSvc)
 
@@ -213,20 +244,7 @@ func main() {
 	globalTray.OnClick(func() {
 		toggleIME()
 	})
-
-	// Status callback - called when hotkey toggles IME
-	globalImeLoop.OnEnabledChanged = func(enabled bool) {
-		updateUI(enabled)
-		// Play beep sound when toggled via hotkey
-		core.PlayBeep(enabled)
-	}
 	core.StartupTraceStage("tray-ready")
-
-	// Start IME loop BEFORE app.Run() so keyboard hook is active
-	if err := globalImeLoop.Start(); err != nil {
-		log.Fatalf("Failed to start IME loop: %v", err)
-	}
-	core.StartupTraceStage("hook-start")
 
 	// Initialize updater service
 	updaterSvc = services.NewUpdaterService(Version)
@@ -399,6 +417,15 @@ func showTooltipNotification(title, message string) {
 }
 
 func updateUI(enabled bool) {
+	// Defense in depth: by construction this only runs inside
+	// application.InvokeAsync callbacks queued after globalApp was set (see
+	// OnEnabledChanged in main()), so tray/menu/settings are guaranteed
+	// ready by the time this executes. Guard anyway in case that invariant
+	// ever changes (e.g. a future direct call site).
+	if globalApp == nil || globalTray == nil || settingsSvc == nil {
+		return
+	}
+
 	// Update tray icon
 	if enabled {
 		globalTray.SetIcon(iconOn)
