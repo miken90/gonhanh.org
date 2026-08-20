@@ -75,6 +75,8 @@ var (
 )
 
 func main() {
+	core.StartupTraceBegin()
+
 	relaunch := false
 	for _, arg := range os.Args[1:] {
 		if arg == "--relaunch" {
@@ -88,6 +90,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer core.ReleaseMutex()
+	core.StartupTraceStage("mutex")
 
 	core.QuitApp = func() {
 		wantQuit = true
@@ -108,10 +111,12 @@ func main() {
 	}
 	core.DLLPath = dllPath
 	log.Printf("Using DLL: %s", dllPath)
+	core.StartupTraceStage("dll-extract")
 
 	// Generate icons
 	iconOn = CreateIconOn()
 	iconOff = CreateIconOff()
+	core.StartupTraceStage("icons")
 
 	// Initialize services
 	settingsSvc = services.NewSettingsService()
@@ -119,6 +124,7 @@ func main() {
 		log.Printf("Failed to load settings: %v", err)
 	}
 	settings := settingsSvc.Settings()
+	core.StartupTraceStage("settings-load")
 
 	if settings.RunAsAdmin && !services.IsElevated() {
 		log.Printf("RunAsAdmin enabled but not elevated, re-launching...")
@@ -135,12 +141,14 @@ func main() {
 	if err := formattingSvc.Load(); err != nil {
 		log.Printf("Failed to load formatting config: %v", err)
 	}
+	core.StartupTraceStage("formatting-load")
 
 	// Initialize IME loop
 	globalImeLoop, err = core.NewImeLoop()
 	if err != nil {
 		log.Fatalf("Failed to create IME loop: %v", err)
 	}
+	core.StartupTraceStage("imeloop-create")
 
 	// Apply settings to IME
 	applySettings(globalImeLoop, settings)
@@ -177,6 +185,7 @@ func main() {
 			// Windows-specific options
 		},
 	})
+	core.StartupTraceStage("wails-new")
 
 	// Create system tray
 	globalTray = globalApp.SystemTray.New()
@@ -206,11 +215,13 @@ func main() {
 		// Play beep sound when toggled via hotkey
 		core.PlayBeep(enabled)
 	}
+	core.StartupTraceStage("tray-ready")
 
 	// Start IME loop BEFORE app.Run() so keyboard hook is active
 	if err := globalImeLoop.Start(); err != nil {
 		log.Fatalf("Failed to start IME loop: %v", err)
 	}
+	core.StartupTraceStage("hook-start")
 
 	// Initialize updater service
 	updaterSvc = services.NewUpdaterService(Version)
@@ -218,9 +229,12 @@ func main() {
 	// Check for updates in background (non-blocking)
 	go checkForUpdatesBackground()
 
-	log.Printf("FKey started. IME: %s, Method: %d", 
+	log.Printf("FKey started. IME: %s, Method: %d",
 		map[bool]string{true: "ON", false: "OFF"}[settings.Enabled],
 		settings.InputMethod)
+
+	core.StartupTraceStage("run")
+	core.StartupTraceFinish()
 
 	// Run application (blocks until quit)
 	if err := globalApp.Run(); err != nil {
