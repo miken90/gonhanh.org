@@ -4,12 +4,15 @@ package core
 // This is the main integration point for Vietnamese input processing
 
 import (
+	"fmt"
+	"log"
 	"sync"
 )
 
 // ImeLoop manages the complete IME processing pipeline
 type ImeLoop struct {
 	hook      *KeyboardHook
+	mouseHook *MouseHook
 	bridge    *Bridge
 	settings  *ImeSettings
 	coalescer *Coalescer
@@ -56,12 +59,14 @@ func NewImeLoop() (*ImeLoop, error) {
 	}
 
 	hook := NewKeyboardHook()
+	mouseHook := NewMouseHook()
 	settings := DefaultImeSettings()
 
 	loop := &ImeLoop{
-		hook:     hook,
-		bridge:   bridge,
-		settings: settings,
+		hook:      hook,
+		mouseHook: mouseHook,
+		bridge:    bridge,
+		settings:  settings,
 	}
 
 	// Create coalescer with sendFunc callback
@@ -71,8 +76,22 @@ func NewImeLoop() (*ImeLoop, error) {
 
 	// Set up key processing callback
 	hook.OnKeyPressed = loop.processKey
+	// H0/H-Win fix: nav/function/numpad keys and Win combos clear the buffer
+	// and flush the coalescer without going through processKey.
+	hook.OnClearKey = loop.clearAndFlush
+	// Mouse click can also move the caret without any key event; same fix.
+	mouseHook.OnButtonDown = loop.clearAndFlush
 
 	return loop, nil
+}
+
+// clearAndFlush clears the engine buffer and flushes any pending coalesced
+// replacement. Used for keys/clicks that invalidate the buffer but don't
+// otherwise go through processKey (nav/F-keys/numpad, Win combos, mouse
+// clicks).
+func (l *ImeLoop) clearAndFlush() {
+	l.bridge.Clear()
+	l.coalescer.Flush()
 }
 
 // Start begins the IME loop
@@ -93,6 +112,13 @@ func (l *ImeLoop) Start() error {
 		return err
 	}
 
+	// Start mouse hook (H0 companion fix). Not fatal if it fails - typing
+	// still works via the keyboard hook alone, just without the click-clears-
+	// buffer safety net - so log and continue rather than aborting startup.
+	if err := l.mouseHook.Start(); err != nil {
+		log.Printf("[ImeLoop] failed to start mouse hook: %v", err)
+	}
+
 	l.running = true
 	return nil
 }
@@ -107,6 +133,7 @@ func (l *ImeLoop) Stop() {
 	}
 
 	l.hook.Stop()
+	l.mouseHook.Stop()
 	l.running = false
 }
 
@@ -178,8 +205,26 @@ func (l *ImeLoop) ClearBuffer() {
 // processKey handles a keystroke through the IME pipeline
 // Returns true if the key was handled (should be blocked)
 func (l *ImeLoop) processKey(keyCode uint16, shift, capsLock bool) bool {
+	// Phase 0 instrumentation: log the digit path (VK 0x30-0x39) when
+	// FKEY_DEBUG=1, alongside the ring buffer of untracked keys that
+	// preceded it, to confirm/refute hypothesis H0 (stale buffer desync via
+	// keys IsRelevantKey never routes here). Zero cost otherwise: the
+	// FKeyDebugEnabled bool short-circuits IsNumberKey.
+	var dbgStage, dbgText, dbgMethod string
+	var dbgBackspaces int
+	isDigitDebug := FKeyDebugEnabled && IsNumberKey(keyCode)
+	if isDigitDebug {
+		defer func() {
+			logDigitDebug(fmt.Sprintf(
+				"digit vk=0x%02X shift=%v caps=%v stage=%s backspaces=%d text=%q method=%s process=%s ignored_ring=[%s]",
+				keyCode, shift, capsLock, dbgStage, dbgBackspaces, dbgText, dbgMethod,
+				GetCurrentProcessName(), snapshotIgnoredKeyRing()))
+		}()
+	}
+
 	if !l.settings.Enabled {
 		// IME disabled, flush any pending and pass through
+		dbgStage = "disabled"
 		l.coalescer.Flush()
 		return false
 	}
@@ -189,6 +234,11 @@ func (l *ImeLoop) processKey(keyCode uint16, shift, capsLock bool) bool {
 		l.bridge.Clear()
 		l.coalescer.Flush()
 		InvalidateSmartProfileCache()
+		// consumed-map leak fix: an elevated destination window (UIPI) can
+		// silently eat a KEYUP we're waiting to suppress, leaving a stale
+		// counter that would wrongly suppress a future KEYUP in a different,
+		// non-elevated app.
+		l.hook.ResetConsumed()
 	}
 
 	// Check if app requires passthrough (remote desktop apps like Parsec).
@@ -196,6 +246,7 @@ func (l *ImeLoop) processKey(keyCode uint16, shift, capsLock bool) bool {
 	// Skip engine processing entirely so keys pass through to the remote.
 	profile := GetSmartAppProfile(GetCurrentProcessName())
 	if profile.Method == MethodPassthrough {
+		dbgStage = "passthrough"
 		return false
 	}
 
@@ -203,6 +254,7 @@ func (l *ImeLoop) processKey(keyCode uint16, shift, capsLock bool) bool {
 	macKeycode := TranslateToMacKeycode(keyCode)
 	if macKeycode == 0xFFFF {
 		// Key not mapped, flush any pending coalesced text first
+		dbgStage = "unmapped"
 		l.coalescer.Flush()
 		return false
 	}
@@ -215,10 +267,14 @@ func (l *ImeLoop) processKey(keyCode uint16, shift, capsLock bool) bool {
 
 	// Process through Rust engine
 	result := l.bridge.ProcessKey(macKeycode, caps, false, shift)
+	if isDigitDebug {
+		dbgMethod = injectionMethodName(profile.Method)
+	}
 
 	switch result.Action {
 	case ActionNone:
 		// No action needed, but flush any pending coalesced text first
+		dbgStage = "none"
 		l.coalescer.Flush()
 		return false
 
@@ -226,7 +282,10 @@ func (l *ImeLoop) processKey(keyCode uint16, shift, capsLock bool) bool {
 		// Send replacement text
 		text := result.GetText()
 		backspaces := int(result.Backspace)
-		
+		dbgStage = "send"
+		dbgText = text
+		dbgBackspaces = backspaces
+
 		// Use coalescing if profile says so AND this is a diacritic replacement
 		if profile.Coalesce && backspaces > 0 {
 			l.coalescer.Queue(text, backspaces, profile.Method, profile.CoalesceMs)
@@ -243,10 +302,14 @@ func (l *ImeLoop) processKey(keyCode uint16, shift, capsLock bool) bool {
 		l.coalescer.Flush()
 		text := result.GetText()
 		backspaces := int(result.Backspace)
+		dbgStage = "restore"
+		dbgText = text
+		dbgBackspaces = backspaces
 		SendText(text, backspaces)
 		return true
 	}
 
+	dbgStage = "fallthrough"
 	return false
 }
 

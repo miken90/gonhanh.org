@@ -48,6 +48,28 @@ const (
 	VK_OEM_COMMA  = 0xBC // ,<
 	VK_OEM_MINUS  = 0xBD // -_
 	VK_OEM_PERIOD = 0xBE // .>
+
+	// Navigation / function / numpad keys (H0 fix) and Win keys (H-Win fix).
+	// None of these pass IsRelevantKey, so without explicit handling they
+	// never reach processKey - the engine buffer goes stale relative to
+	// what's actually on screen, and a later digit/letter can mutate that
+	// stale buffer at the new cursor position.
+	VK_PRIOR    = 0x21 // Page Up
+	VK_NEXT     = 0x22 // Page Down
+	VK_END      = 0x23
+	VK_HOME     = 0x24
+	VK_LEFT     = 0x25
+	VK_UP       = 0x26
+	VK_RIGHT    = 0x27
+	VK_DOWN     = 0x28
+	VK_INSERT   = 0x2D
+	VK_DELETE   = 0x2E
+	VK_NUMPAD0  = 0x60
+	VK_DIVIDE   = 0x6F // last numpad operator key (0x60-0x6F: digits 0-9 + * + - + . + /)
+	VK_F1       = 0x70
+	VK_F12      = 0x7B
+	VK_LWIN     = 0x5B
+	VK_RWIN     = 0x5C
 )
 
 // KBDLLHOOKSTRUCT matches Windows structure
@@ -155,6 +177,12 @@ type KeyboardHook struct {
 	// Callbacks
 	OnKeyPressed func(keyCode uint16, shift, capsLock bool) bool // returns true if handled
 	OnHotkey     func()
+	// OnClearKey is called (synchronously, must stay cheap) when a key that
+	// invalidates the engine's buffer - but that IsRelevantKey never routes
+	// to OnKeyPressed - is seen: nav/F-keys/numpad (H0 fix) or a Win combo
+	// (H-Win fix). The callback must clear the engine buffer and flush any
+	// pending coalesced replacement.
+	OnClearKey func()
 
 	// Hotkey configuration
 	Hotkey        *KeyboardShortcut
@@ -300,6 +328,12 @@ func (h *KeyboardHook) hookCallback(nCode int, wParam uintptr, lParam uintptr) u
 	// Process key down events
 	if nCode >= 0 && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
 
+		// Phase 0 instrumentation (H0): record this key if it's one of the
+		// classes IsRelevantKey never routes to processKey, so a digit-path
+		// debug log can show what untracked keys preceded it. No-op unless
+		// FKEY_DEBUG=1.
+		recordIgnoredKey(keyCode)
+
 		// Get modifier states
 		// Note: The key currently being pressed may not be reflected in GetAsyncKeyState yet
 		// So we need to account for it based on keyCode
@@ -441,16 +475,32 @@ func (h *KeyboardHook) hookCallback(nCode int, wParam uintptr, lParam uintptr) u
 			}
 		}
 
+		// H-Win fix: Win+key (taskbar shortcuts like Win+1..9) must never enter
+		// the engine. Win isn't tracked by GetAsyncKeyState the way Ctrl/Alt/
+		// Shift are above, so check it explicitly via isKeyDown.
+		win := isKeyDown(VK_LWIN) || isKeyDown(VK_RWIN)
+
+		// H0 fix: nav/function/numpad keys never reach OnKeyPressed (see
+		// IsRelevantKey), so without this they'd leave the engine buffer
+		// stale. Clear + flush, then pass through. Placed after hotkey
+		// matching above so a user-configured hotkey (e.g. Ctrl+F5) still
+		// takes priority over this fallback.
+		if win || IsBufferClearKey(keyCode) {
+			if h.OnClearKey != nil {
+				h.OnClearKey()
+			}
+			ret, _, _ := procCallNextHookEx.Call(h.hookID, uintptr(nCode), wParam, lParam)
+			return ret
+		}
+
 		// Only process relevant keys for Vietnamese input
 		if IsRelevantKey(keyCode) {
 			// Skip if Ctrl or Alt is pressed (shortcuts)
 			if ctrl || alt {
-				// Clear buffer on Ctrl+key combinations
-				if ctrl {
-					bridge, _ := GetBridge()
-					if bridge != nil {
-						bridge.Clear()
-					}
+				// Clear buffer on Ctrl+key or Alt+key combinations
+				bridge, _ := GetBridge()
+				if bridge != nil {
+					bridge.Clear()
 				}
 				ret, _, _ := procCallNextHookEx.Call(h.hookID, uintptr(nCode), wParam, lParam)
 				return ret
@@ -492,6 +542,19 @@ func (h *KeyboardHook) hookCallback(nCode int, wParam uintptr, lParam uintptr) u
 	return ret
 }
 
+// ResetConsumed clears the KEYUP-suppression counters. Call this when the
+// foreground app changes: an elevated destination window (UIPI) can silently
+// eat a KEYUP we're waiting to suppress, leaving a stale counter that would
+// wrongly suppress a future KEYUP for the same key after focus moves to a
+// non-elevated window.
+func (h *KeyboardHook) ResetConsumed() {
+	h.consumedMu.Lock()
+	for k := range h.consumed {
+		delete(h.consumed, k)
+	}
+	h.consumedMu.Unlock()
+}
+
 // isKeyDown checks if a key is currently pressed
 func isKeyDown(vk int) bool {
 	ret, _, _ := procGetAsyncKeyState.Call(uintptr(vk))
@@ -512,6 +575,29 @@ func IsLetterKey(vk uint16) bool {
 // IsNumberKey checks if virtual key is a number (0-9)
 func IsNumberKey(vk uint16) bool {
 	return vk >= VK_0 && vk <= VK_9
+}
+
+// IsBufferClearKey reports whether vk is a navigation, function, or numpad
+// key that IsRelevantKey never routes to processKey, but that moves the
+// cursor, changes focus, or otherwise invalidates the engine's in-memory
+// word buffer (hypothesis H0). These must clear the buffer and flush any
+// pending coalesced replacement before passing through, or a later
+// digit/letter keystroke can mutate stale "ghost" text at the new cursor
+// position.
+func IsBufferClearKey(vk uint16) bool {
+	switch {
+	case vk >= VK_LEFT && vk <= VK_DOWN: // arrows
+		return true
+	case vk >= VK_PRIOR && vk <= VK_HOME: // PgUp/PgDn/End/Home
+		return true
+	case vk == VK_INSERT || vk == VK_DELETE:
+		return true
+	case vk >= VK_F1 && vk <= VK_F12:
+		return true
+	case vk >= VK_NUMPAD0 && vk <= VK_DIVIDE: // numpad digits + operators
+		return true
+	}
+	return false
 }
 
 // IsRelevantKey checks if key should be processed by IME
